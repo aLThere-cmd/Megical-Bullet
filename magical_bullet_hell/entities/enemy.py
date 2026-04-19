@@ -56,11 +56,33 @@ class Enemy(pygame.sprite.Sprite):
         return self.hp <= 0
 
     def apply_status_effect(self, effect_name, duration_frames, damage_percent):
-        """Apply a status effect. Now supports stacking by allowing multiple entries of the same type."""
+        """Apply a status effect. Blue flame detonates existing burns."""
+        from config.settings import FPS, STATUS_TICK_RATE
         tick_frames = int(STATUS_TICK_RATE * FPS)
+        
+        if effect_name == "blue_flame":
+            # DETONATION MECHANIC: Ignite all existing burns instantly
+            total_detonation_dmg = 0
+            if "burn" in self.status_effects:
+                for stack in self.status_effects["burn"]:
+                    # Calculate remaining ticks
+                    ticks_left = max(1, stack['timer'] // tick_frames)
+                    total_detonation_dmg += (self.max_hp * stack['damage_percent']) * ticks_left
+                # Clear burns after detonating
+                del self.status_effects["burn"]
+            
+            if total_detonation_dmg > 0:
+                self.take_damage(total_detonation_dmg)
+                # Visual feedback for detonation could go here
+            return
+
         if effect_name not in self.status_effects:
             self.status_effects[effect_name] = []
             
+        # Limit to 4 stacks: remove oldest if at limit
+        if len(self.status_effects[effect_name]) >= 4:
+            self.status_effects[effect_name].pop(0)
+
         self.status_effects[effect_name].append({
             'timer': duration_frames,
             'tick_timer': tick_frames,

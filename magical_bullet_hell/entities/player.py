@@ -51,7 +51,8 @@ class Player(pygame.sprite.Sprite):
         self.dead = False
         self.death_timer = 0
         self.anim_timer = 0
-        self.damage_multiplier = 1.0
+        self.base_damage_mult = 0.15 if self.character_id == "magical_girl" else 1.0
+        self.damage_multiplier = self.base_damage_mult
         
         # Apply passives
         if self.character_id == "muscular_man":
@@ -117,7 +118,7 @@ class Player(pygame.sprite.Sprite):
                 self.bomb_timer = PLAYER_BOMB_DURATION
                 self.invincible_timer = max(self.invincible_timer, PLAYER_BOMB_DURATION)
                 
-            self.damage_multiplier = 1.3
+            self.damage_multiplier = self.base_damage_mult * (1.3 if self.character_id == "muscular_man" else 1.0)
             from systems.audio import audio
             audio.play("bomb")
             return True
@@ -222,10 +223,10 @@ class Player(pygame.sprite.Sprite):
         if self.character_id == "magical_girl":
             # Laser beams
             self.bullet_group.add(
-                PlayerBullet(self.x - 3, self.y - 10, 0, -speed, damage * 1.5, focused=True, width_mult=0.4)
+                PlayerBullet(self.x - 3, self.y - 10, 0, -speed, damage * 1.1, focused=True, width_mult=0.4)
             )
             self.bullet_group.add(
-                PlayerBullet(self.x + 3, self.y - 10, 0, -speed, damage * 1.5, focused=True, width_mult=0.4)
+                PlayerBullet(self.x + 3, self.y - 10, 0, -speed, damage * 1.1, focused=True, width_mult=0.4)
             )
 
             if power_level >= 2:
@@ -277,7 +278,7 @@ class Player(pygame.sprite.Sprite):
         if self.bomb_timer > 0:
             self.bomb_timer -= 1
             if self.bomb_timer == 0:
-                self.damage_multiplier = 1.0 # Reset damage multiplier when bomb ends
+                self.damage_multiplier = self.base_damage_mult # Reset damage multiplier when bomb ends
 
         self.shoot()
         self.rect.center = (int(self.x), int(self.y))
