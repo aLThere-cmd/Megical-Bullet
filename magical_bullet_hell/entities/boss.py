@@ -7,7 +7,7 @@ import random
 from config.settings import (
     PLAYFIELD_X, PLAYFIELD_Y, PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT,
     BOSS_PHASE_HP, BOSS_PHASE_TIME, BOSS_MOVE_SPEED, BOSS_SCORE,
-    ENEMY_BULLET_SPEED_SLOW, ENEMY_BULLET_SPEED_MEDIUM,
+    ENEMY_BULLET_SPEED_SLOW, ENEMY_BULLET_SPEED_MEDIUM, ENEMY_BULLET_SPEED_FAST,
     BULLET_COLORS, FPS,
 )
 from utils.renderer import draw_glow_circle, draw_star
@@ -204,7 +204,6 @@ class Boss(pygame.sprite.Sprite):
                      angle + spread, 6, 6, "circle")
                 )
 
-        ENEMY_BULLET_SPEED_FAST = 5.0
         self.shoot_timer = 3
         return params
 
@@ -244,10 +243,10 @@ class Boss(pygame.sprite.Sprite):
 
     def update(self):
         self.anim_timer += 1
-        self.pattern_timer += 1
-
         if self.shoot_timer > 0:
             self.shoot_timer -= 1
+        if not self.entering and not self.defeated:
+            self.pattern_timer += 1
         if self.flash_timer > 0:
             self.flash_timer -= 1
 

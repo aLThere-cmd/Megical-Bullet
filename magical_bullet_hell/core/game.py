@@ -251,7 +251,7 @@ class Game:
         # Enemy shooting
         for enemy in self.enemies:
             if isinstance(enemy, Boss):
-                if enemy.can_shoot() if hasattr(enemy, 'can_shoot') else not enemy.entering:
+                if not enemy.entering:
                     params = enemy.get_bullet_params(self.player.x, self.player.y)
                     if params:
                         spawn_bullets(self.enemy_bullets, enemy.x, enemy.y, params)
