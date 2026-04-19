@@ -23,6 +23,10 @@ class AudioSystem:
                 return
         
         self.enabled = True
+        from config.manager import settings_manager
+        self.sfx_volume = settings_manager.get_audio("sfx_volume")
+        self.music_volume = settings_manager.get_audio("music_volume")
+        pygame.mixer.music.set_volume(self.music_volume)
 
         # Load sounds
         sound_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "sounds")
@@ -42,17 +46,17 @@ class AudioSystem:
             if os.path.exists(path):
                 try:
                     sound = pygame.mixer.Sound(path)
-                    sound.set_volume(self.volume)
                     
-                    # Special volumes
+                    # Apply master SFX volume
+                    base_vol = self.sfx_volume
                     if name == "shoot":
-                        sound.set_volume(self.volume * 0.5)
+                        sound.set_volume(base_vol * 0.4)
                     elif name == "graze":
-                        sound.set_volume(self.volume * 0.8)
+                        sound.set_volume(base_vol * 0.6)
                     elif name == "bomb":
-                        sound.set_volume(self.volume * 1.0)
+                        sound.set_volume(base_vol * 0.9)
                     else:
-                        sound.set_volume(self.volume * 0.8)
+                        sound.set_volume(base_vol * 0.7)
                         
                     self.sounds[name] = sound
                 except pygame.error as e:
@@ -62,6 +66,51 @@ class AudioSystem:
         """Play a sound by name."""
         if self.enabled and name in self.sounds:
             self.sounds[name].play()
+
+    def play_music(self, track_name):
+        """Play background music."""
+        if not self.enabled:
+            return
+            
+        music_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "music")
+        if not os.path.exists(music_dir):
+            os.makedirs(music_dir)
+            
+        path = os.path.join(music_dir, f"{track_name}.wav")
+        if os.path.exists(path):
+            try:
+                pygame.mixer.music.load(path)
+                pygame.mixer.music.play(-1)
+            except pygame.error as e:
+                print(f"Failed to play music {track_name}: {e}")
+        else:
+            # Generate if missing (placeholder logic)
+            print(f"Music track {track_name} not found. Generating...")
+            try:
+                from utils.sound_gen import generate_music
+                generate_music(track_name, path)
+                pygame.mixer.music.load(path)
+                pygame.mixer.music.play(-1)
+            except Exception as e:
+                print(f"Failed to generate/play music: {e}")
+
+    def update_volumes(self):
+        """Reload volumes from settings."""
+        from config.manager import settings_manager
+        self.sfx_volume = settings_manager.get_audio("sfx_volume")
+        self.music_volume = settings_manager.get_audio("music_volume")
+        pygame.mixer.music.set_volume(self.music_volume)
+        
+        for name, sound in self.sounds.items():
+            base_vol = self.sfx_volume
+            if name == "shoot":
+                sound.set_volume(base_vol * 0.4)
+            elif name == "graze":
+                sound.set_volume(base_vol * 0.6)
+            elif name == "bomb":
+                sound.set_volume(base_vol * 0.9)
+            else:
+                sound.set_volume(base_vol * 0.7)
 
 
 # Global instance

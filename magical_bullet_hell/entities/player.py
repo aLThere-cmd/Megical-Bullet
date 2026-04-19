@@ -21,11 +21,12 @@ from utils.math_helpers import clamp, wave_value
 
 
 class Player(pygame.sprite.Sprite):
-    """The Magical Girl player character."""
+    """The Magical Girl (or Muscular Man) player character."""
 
-    def __init__(self, bullet_group):
+    def __init__(self, bullet_group, character_id="magical_girl"):
         super().__init__()
         self.bullet_group = bullet_group
+        self.character_id = character_id
 
         # Position
         self.x = float(PLAYFIELD_X + PLAYFIELD_WIDTH // 2)
@@ -39,7 +40,7 @@ class Player(pygame.sprite.Sprite):
         # State
         self.lives = PLAYER_START_LIVES
         self.bombs = PLAYER_START_BOMBS
-        self.power = PLAYER_START_POWER
+        self.power = 4.0  # Powerups removed, start at max power
         self.score = 0
         self.graze_count = 0
         self.focused = False
@@ -50,6 +51,11 @@ class Player(pygame.sprite.Sprite):
         self.dead = False
         self.death_timer = 0
         self.anim_timer = 0
+        self.damage_multiplier = 1.0
+        
+        # Apply passives
+        if self.character_id == "muscular_man":
+            self.lives += 2
 
     @property
     def hitbox_radius(self):
@@ -103,8 +109,15 @@ class Player(pygame.sprite.Sprite):
         """Activate spell card (bomb)."""
         if self.bombs > 0 and self.bomb_timer <= 0:
             self.bombs -= 1
-            self.bomb_timer = PLAYER_BOMB_DURATION
-            self.invincible_timer = max(self.invincible_timer, PLAYER_BOMB_INVINCIBLE)
+            if self.character_id == "magical_girl":
+                self.bomb_timer = PLAYER_BOMB_DURATION
+                self.invincible_timer = max(self.invincible_timer, PLAYER_BOMB_INVINCIBLE)
+            elif self.character_id == "muscular_man":
+                # Phoenix form lasts 15 seconds (15 * 60 = 900 frames)
+                self.bomb_timer = 900
+                self.invincible_timer = max(self.invincible_timer, 900)
+                
+            self.damage_multiplier = 1.3
             from systems.audio import audio
             audio.play("bomb")
             return True
@@ -117,7 +130,7 @@ class Player(pygame.sprite.Sprite):
         self.lives -= 1
         self.dead = True
         self.death_timer = 60
-        self.power = max(1.0, self.power - 0.5)
+        # self.power = max(1.0, self.power - 0.5) # Removed power loss
         return True
 
     def respawn(self):
@@ -153,11 +166,14 @@ class Player(pygame.sprite.Sprite):
     def _shoot_spread(self, power_level):
         """Unfocused spread shot pattern."""
         speed = PLAYER_BULLET_SPEED
-        damage = PLAYER_BULLET_DAMAGE
+        damage = PLAYER_BULLET_DAMAGE * self.damage_multiplier
+        
+        move_type = "homing_sine" if self.character_id == "magical_girl" else "linear"
+        stat_effect = "burn" if self.character_id == "muscular_man" else None
 
         # Central shot always
         self.bullet_group.add(
-            PlayerBullet(self.x, self.y - 10, 0, -speed, damage)
+            PlayerBullet(self.x, self.y - 10, 0, -speed, damage, movement_type=move_type, status_effect=stat_effect)
         )
 
         if power_level >= 2:
@@ -165,62 +181,72 @@ class Player(pygame.sprite.Sprite):
             spread = 0.15
             self.bullet_group.add(
                 PlayerBullet(self.x - 8, self.y - 5,
-                             math.sin(-spread) * speed * 0.3, -speed, damage * 0.7)
+                             math.sin(-spread) * speed * 0.3, -speed, damage * 0.7, movement_type=move_type, status_effect=stat_effect)
             )
             self.bullet_group.add(
                 PlayerBullet(self.x + 8, self.y - 5,
-                             math.sin(spread) * speed * 0.3, -speed, damage * 0.7)
+                             math.sin(spread) * speed * 0.3, -speed, damage * 0.7, movement_type=move_type, status_effect=stat_effect)
             )
 
         if power_level >= 3:
             spread2 = 0.25
             self.bullet_group.add(
                 PlayerBullet(self.x - 16, self.y,
-                             math.sin(-spread2) * speed * 0.5, -speed, damage * 0.5)
+                             math.sin(-spread2) * speed * 0.5, -speed, damage * 0.5, movement_type=move_type, status_effect=stat_effect)
             )
             self.bullet_group.add(
                 PlayerBullet(self.x + 16, self.y,
-                             math.sin(spread2) * speed * 0.5, -speed, damage * 0.5)
+                             math.sin(spread2) * speed * 0.5, -speed, damage * 0.5, movement_type=move_type, status_effect=stat_effect)
             )
 
         if power_level >= 4:
             self.bullet_group.add(
-                PlayerBullet(self.x, self.y - 10, 0, -speed * 1.2, damage * 1.2)
+                PlayerBullet(self.x, self.y - 10, 0, -speed * 1.2, damage * 1.2, movement_type=move_type, status_effect=stat_effect)
             )
 
     def _shoot_focused(self, power_level):
         """Focused concentrated shot pattern."""
         speed = PLAYER_FOCUS_BULLET_SPEED
-        damage = PLAYER_FOCUS_BULLET_DAMAGE
+        damage = PLAYER_FOCUS_BULLET_DAMAGE * self.damage_multiplier
 
-        # Tight forward shots
-        self.bullet_group.add(
-            PlayerBullet(self.x - 3, self.y - 10, 0, -speed, damage, focused=True)
-        )
-        self.bullet_group.add(
-            PlayerBullet(self.x + 3, self.y - 10, 0, -speed, damage, focused=True)
-        )
-
-        if power_level >= 2:
+        if self.character_id == "magical_girl":
+            # Laser beams
             self.bullet_group.add(
-                PlayerBullet(self.x - 7, self.y - 5, 0, -speed * 0.95, damage * 0.8, focused=True)
+                PlayerBullet(self.x - 3, self.y - 10, 0, -speed, damage * 1.5, focused=True, width_mult=0.4)
             )
             self.bullet_group.add(
-                PlayerBullet(self.x + 7, self.y - 5, 0, -speed * 0.95, damage * 0.8, focused=True)
+                PlayerBullet(self.x + 3, self.y - 10, 0, -speed, damage * 1.5, focused=True, width_mult=0.4)
             )
 
-        if power_level >= 3:
-            self.bullet_group.add(
-                PlayerBullet(self.x - 12, self.y, 0.3, -speed * 0.9, damage * 0.7, focused=True)
-            )
-            self.bullet_group.add(
-                PlayerBullet(self.x + 12, self.y, -0.3, -speed * 0.9, damage * 0.7, focused=True)
-            )
+            if power_level >= 2:
+                self.bullet_group.add(
+                    PlayerBullet(self.x - 7, self.y - 5, 0, -speed * 0.95, damage * 1.2, focused=True, width_mult=0.4)
+                )
+                self.bullet_group.add(
+                    PlayerBullet(self.x + 7, self.y - 5, 0, -speed * 0.95, damage * 1.2, focused=True, width_mult=0.4)
+                )
 
-        if power_level >= 4:
-            self.bullet_group.add(
-                PlayerBullet(self.x, self.y - 15, 0, -speed * 1.1, damage * 1.5, focused=True)
-            )
+            if power_level >= 3:
+                self.bullet_group.add(
+                    PlayerBullet(self.x - 12, self.y, 0, -speed * 0.9, damage * 1.0, focused=True, width_mult=0.4)
+                )
+                self.bullet_group.add(
+                    PlayerBullet(self.x + 12, self.y, 0, -speed * 0.9, damage * 1.0, focused=True, width_mult=0.4)
+                )
+
+            if power_level >= 4:
+                self.bullet_group.add(
+                    PlayerBullet(self.x, self.y - 15, 0, -speed * 1.1, damage * 2.0, focused=True, width_mult=0.5)
+                )
+        elif self.character_id == "muscular_man":
+            # Fire breath (flamethrower) - 0 damage, applies blue_flame
+            import random
+            for i in range(2 + int(power_level)):
+                vx = random.uniform(-1.5, 1.5)
+                vy = -random.uniform(speed * 0.6, speed * 1.2)
+                self.bullet_group.add(
+                    PlayerBullet(self.x, self.y - 10, vx, vy, damage=0, focused=True, status_effect="blue_flame")
+                )
 
     def update(self):
         """Update player state."""
@@ -240,6 +266,8 @@ class Player(pygame.sprite.Sprite):
             self.invincible_timer -= 1
         if self.bomb_timer > 0:
             self.bomb_timer -= 1
+            if self.bomb_timer == 0:
+                self.damage_multiplier = 1.0 # Reset damage multiplier when bomb ends
 
         self.shoot()
         self.rect.center = (int(self.x), int(self.y))
@@ -259,39 +287,70 @@ class Player(pygame.sprite.Sprite):
         # Wing glow (pulsing)
         pulse = 0.7 + 0.3 * math.sin(self.anim_timer * 0.1)
 
-        # Wings (triangles)
-        wing_spread = 10 + wave_value(self.anim_timer, 0.08, 3)
-        left_wing = [
-            (cx - 4, cy),
-            (cx - wing_spread - 6, cy - 8),
-            (cx - wing_spread - 2, cy + 6),
-        ]
-        right_wing = [
-            (cx + 4, cy),
-            (cx + wing_spread + 6, cy - 8),
-            (cx + wing_spread + 2, cy + 6),
-        ]
-        wing_color = (*COLOR_PLAYER_WING[:3], int(180 * pulse))
-        pygame.draw.polygon(self.image, wing_color, left_wing)
-        pygame.draw.polygon(self.image, wing_color, right_wing)
+        if self.character_id == "magical_girl":
+            # Wings (triangles)
+            wing_spread = 10 + wave_value(self.anim_timer, 0.08, 3)
+            left_wing = [
+                (cx - 4, cy),
+                (cx - wing_spread - 6, cy - 8),
+                (cx - wing_spread - 2, cy + 6),
+            ]
+            right_wing = [
+                (cx + 4, cy),
+                (cx + wing_spread + 6, cy - 8),
+                (cx + wing_spread + 2, cy + 6),
+            ]
+            wing_color = (*COLOR_PLAYER_WING[:3], int(180 * pulse))
+            pygame.draw.polygon(self.image, wing_color, left_wing)
+            pygame.draw.polygon(self.image, wing_color, right_wing)
 
-        # Body glow
-        draw_glow_circle(self.image, COLOR_PLAYER_GLOW, (cx, cy), 8, 0.4 * pulse)
+            # Body glow
+            draw_glow_circle(self.image, COLOR_PLAYER_GLOW, (cx, cy), 8, 0.4 * pulse)
 
-        # Body (small triangle pointing up)
-        body_pts = [
-            (cx, cy - 10),
-            (cx - 6, cy + 5),
-            (cx + 6, cy + 5),
-        ]
-        pygame.draw.polygon(self.image, COLOR_PLAYER_BODY, body_pts)
-        pygame.draw.polygon(self.image, (255, 220, 240), body_pts, 1)
+            # Body (small triangle pointing up)
+            body_pts = [
+                (cx, cy - 10),
+                (cx - 6, cy + 5),
+                (cx + 6, cy + 5),
+            ]
+            pygame.draw.polygon(self.image, COLOR_PLAYER_BODY, body_pts)
+            pygame.draw.polygon(self.image, (255, 220, 240), body_pts, 1)
 
-        # Star on top
-        star_y = cy - 12
-        star_pulse = 0.8 + 0.2 * math.sin(self.anim_timer * 0.15)
-        draw_star(self.image, (255, 255, 200, int(255 * star_pulse)),
-                  (cx, star_y), 4, 2, 4, self.anim_timer * 0.05)
+            # Star on top
+            star_y = cy - 12
+            star_pulse = 0.8 + 0.2 * math.sin(self.anim_timer * 0.15)
+            draw_star(self.image, (255, 255, 200, int(255 * star_pulse)),
+                      (cx, star_y), 4, 2, 4, self.anim_timer * 0.05)
+        elif self.character_id == "muscular_man":
+            from config.settings import COLOR_PLAYER2_BODY, COLOR_PLAYER2_SHIRT, COLOR_PLAYER2_HEAD, COLOR_PLAYER2_COMB
+            
+            if self.is_bombing:
+                # Phoenix glow
+                draw_glow_circle(self.image, (255, 100, 50), (cx, cy), 20, 0.6 * pulse)
+                # Phoenix wings
+                wing_spread = 15 + wave_value(self.anim_timer, 0.2, 5)
+                for side in [-1, 1]:
+                    wing_pts = [
+                        (cx + side * 5, cy),
+                        (cx + side * wing_spread, cy - 15),
+                        (cx + side * (wing_spread - 5), cy + 10)
+                    ]
+                    pygame.draw.polygon(self.image, (255, 150, 50, 180), wing_pts)
+
+            # Muscular arms
+            arm_w = 4 + int(wave_value(self.anim_timer, 0.1, 1))
+            pygame.draw.rect(self.image, COLOR_PLAYER2_BODY, (cx - 12, cy - 2, arm_w, 12), border_radius=2)
+            pygame.draw.rect(self.image, COLOR_PLAYER2_BODY, (cx + 12 - arm_w, cy - 2, arm_w, 12), border_radius=2)
+            
+            # Torso (Orange tank top)
+            pygame.draw.rect(self.image, COLOR_PLAYER2_SHIRT, (cx - 8, cy - 5, 16, 14), border_radius=3)
+            
+            # Chicken Head
+            pygame.draw.circle(self.image, COLOR_PLAYER2_HEAD, (cx, cy - 12), 6)
+            # Beak
+            pygame.draw.polygon(self.image, (255, 200, 50), [(cx + 2, cy - 12), (cx + 8, cy - 10), (cx + 2, cy - 8)])
+            # Comb
+            pygame.draw.polygon(self.image, COLOR_PLAYER2_COMB, [(cx - 3, cy - 16), (cx, cy - 20), (cx + 3, cy - 16)])
 
         # Focus mode hitbox indicator
         if self.focused:
@@ -311,8 +370,8 @@ class Player(pygame.sprite.Sprite):
                                    (int(mx), int(my)), 2)
 
     def add_power(self, amount):
-        """Add power to the player."""
-        self.power = min(PLAYER_MAX_POWER, self.power + amount)
+        """Powerups are removed, this does nothing."""
+        pass
 
     def add_score(self, amount):
         """Add score."""

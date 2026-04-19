@@ -115,30 +115,23 @@ class Item(pygame.sprite.Sprite):
 
 
 def spawn_enemy_drops(x, y, item_group, is_boss=False):
-    """Spawn items when an enemy is killed."""
+    """Spawn items when an enemy is killed. Power-ups removed."""
     if is_boss:
-        # Boss drops lots of items
-        for _ in range(8):
-            ox = x + random.uniform(-30, 30)
-            oy = y + random.uniform(-20, 20)
-            item_group.add(Item(ox, oy, "big_power"))
-        for _ in range(12):
-            ox = x + random.uniform(-40, 40)
-            oy = y + random.uniform(-30, 30)
+        # Boss drops points, life, and bomb
+        for _ in range(20):
+            ox = x + random.uniform(-50, 50)
+            oy = y + random.uniform(-40, 40)
             item_group.add(Item(ox, oy, "point"))
         item_group.add(Item(x, y - 10, "life"))
         item_group.add(Item(x + 15, y - 10, "bomb"))
     else:
         # Normal enemy drops
         roll = random.random()
-        if roll < 0.6:
-            item_group.add(Item(x, y, "power"))
-        elif roll < 0.85:
+        if roll < 0.7:
             item_group.add(Item(x, y, "point"))
-        elif roll < 0.95:
-            item_group.add(Item(x, y, "big_power"))
+        
         # Rare life/bomb drops
-        if random.random() < 0.02:
+        if random.random() < 0.01:
             item_group.add(Item(x + 10, y, "life"))
-        if random.random() < 0.02:
+        if random.random() < 0.01:
             item_group.add(Item(x - 10, y, "bomb"))

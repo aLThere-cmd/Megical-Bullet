@@ -9,7 +9,7 @@ from config.settings import (
     PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT, FPS, TITLE,
     COLOR_BG_DARK, COLOR_PLAYFIELD_BG, COLOR_PLAYFIELD_BORDER,
     ITEM_AUTOCOLLECT_Y, DIFFICULTY,
-    KEY_PAUSE, KEY_SHOOT, KEY_BOMB,
+    KEY_PAUSE, KEY_SHOOT, KEY_BOMB, KEY_FULLSCREEN
 )
 from entities.player import Player
 from entities.boss import Boss
@@ -46,6 +46,7 @@ class Game:
         # Initialize audio
         from systems.audio import audio
         audio.init()
+        audio.play_music("menu")
 
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption(TITLE)
@@ -53,6 +54,7 @@ class Game:
         self.running = True
         self.state = STATE_MENU
         self.frame_count = 0
+        self.is_fullscreen = False
 
         # Background stars
         self.bg_stars = []
@@ -77,6 +79,7 @@ class Game:
         self.spawner = None
         self.particles = ParticleSystem()
         self.difficulty_name = "Normal"
+        self.character_id = "magical_girl"
 
         # Sprite groups
         self.player_bullets = pygame.sprite.Group()
@@ -84,9 +87,10 @@ class Game:
         self.enemies = pygame.sprite.Group()
         self.items = pygame.sprite.Group()
 
-    def start_game(self, difficulty_name):
-        """Initialize a new game with selected difficulty."""
+    def start_game(self, difficulty_name, character_id="magical_girl"):
+        """Initialize a new game with selected difficulty and character."""
         self.difficulty_name = difficulty_name
+        self.character_id = character_id
         diff = DIFFICULTY[difficulty_name]
 
         # Clear everything
@@ -99,10 +103,14 @@ class Game:
         self.frame_count = 0
 
         # Create player
-        self.player = Player(self.player_bullets)
+        self.player = Player(self.player_bullets, character_id=self.character_id)
 
         # Create spawner
         self.spawner = Spawner(self.enemies, diff)
+
+        # Start stage 1 music
+        from systems.audio import audio
+        audio.play_music("stage1")
 
         self.state = STATE_PLAYING
 
@@ -129,12 +137,39 @@ class Game:
 
         pygame.quit()
 
+    def toggle_fullscreen(self):
+        """Toggle fullscreen mode."""
+        self.is_fullscreen = not self.is_fullscreen
+        if self.is_fullscreen:
+            self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.FULLSCREEN)
+        else:
+            self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+
+    def resize_window(self, width, height):
+        """Update window size from settings."""
+        if not self.is_fullscreen:
+            self.screen = pygame.display.set_mode((width, height))
+            
     def _handle_event(self, event):
         """Handle a single event based on current state."""
+        # Handle global events first
+        if event.type == pygame.KEYDOWN and event.key == KEY_FULLSCREEN:
+            self.toggle_fullscreen()
+            return
+            
         if self.state == STATE_MENU:
             result = self.title_screen.handle_input(event)
             if result:
-                self.start_game(result)
+                self.start_game(result[0], result[1])
+            
+            # Check for resolution/volume changes from settings
+            if self.title_screen.menu_state == "title" and self.title_screen.settings_menu.closed_this_frame:
+                from config.manager import settings_manager
+                w, h = settings_manager.get_resolution()
+                self.resize_window(w, h)
+                from systems.audio import audio
+                audio.update_volumes()
+                self.title_screen.settings_menu.closed_this_frame = False
 
         elif self.state == STATE_PLAYING:
             if event.type == pygame.KEYDOWN:
@@ -149,11 +184,13 @@ class Game:
         elif self.state in (STATE_GAME_OVER, STATE_VICTORY):
             if event.type == pygame.KEYDOWN:
                 if event.key == KEY_SHOOT or event.key == pygame.K_j:
-                    # Restart with same difficulty
-                    self.start_game(self.difficulty_name)
-                elif event.key == KEY_PAUSE:
+                    # Restart with same difficulty and character
+                    self.start_game(self.difficulty_name, self.character_id)
+                elif event.key == KEY_PAUSE or event.key == pygame.K_ESCAPE or event.key == pygame.K_RETURN:
                     # Return to menu
                     self.state = STATE_MENU
+                    from systems.audio import audio
+                    audio.play_music("menu")
 
     def _update(self):
         """Update game state."""
@@ -175,7 +212,7 @@ class Game:
 
         # Update entities
         self.player.update()
-        self.player_bullets.update()
+        self.player_bullets.update(self.enemies)
         self.enemy_bullets.update()
         self.enemies.update()
 
@@ -188,10 +225,19 @@ class Game:
 
         # Spawner
         boss_result = self.spawner.update()
+        from systems.audio import audio
         if boss_result:
             # Boss appeared
             self.effects.start_flash((255, 200, 255), 15)
             self.effects.start_shake(3, 20)
+            audio.play_music("boss")
+            
+        # Check for stage transition music
+        if not self.spawner.boss_active:
+            if self.spawner.current_stage == 2 and self.frame_count % 60 == 0:
+                # This is a bit hacky, but check if we should play stage2 music
+                # Only if not already playing and boss is dead
+                pass # Logic to handle this better in spawner would be better
 
         # Boss spell card dimming
         if self.spawner.boss_active and self.spawner.boss:
@@ -217,30 +263,21 @@ class Game:
 
         # Collision detection
         if not self.player.dead:
+            # Process status effects
+            for enemy in list(self.enemies):
+                if hasattr(enemy, 'process_status_effects'):
+                    died = enemy.process_status_effects()
+                    if died and not enemy.alive():
+                        pass # already handled or should be handled. Actually we just let collision logic handle or add death handler
+                    if died:
+                        self._handle_enemy_death(enemy)
+            
             # Player bullets vs enemies
             killed_enemies = check_player_bullet_enemy_collision(
                 self.player_bullets, self.enemies, self.particles
             )
             for enemy in killed_enemies:
-                self.player.add_score(enemy.score_value)
-                from systems.audio import audio
-                audio.play("explosion")
-                self.particles.emit_explosion(enemy.x, enemy.y, enemy.color)
-
-                if isinstance(enemy, Boss):
-                    self.particles.emit_boss_defeat(enemy.x, enemy.y)
-                    self.effects.start_flash((255, 255, 255), 20)
-                    self.effects.start_shake(8, 30)
-                    spawn_enemy_drops(enemy.x, enemy.y, self.items, is_boss=True)
-                    self.spawner.on_boss_defeated()
-                    # Check victory
-                    if self.spawner.game_won:
-                        self.state = STATE_VICTORY
-                else:
-                    spawn_enemy_drops(enemy.x, enemy.y, self.items, is_boss=False)
-                    self.effects.start_shake(2, 5)
-
-                enemy.kill()
+                self._handle_enemy_death(enemy)
 
             # Graze detection
             check_graze(self.player, self.enemy_bullets, self.particles)
@@ -292,30 +329,55 @@ class Game:
                 (255, 180, 220), size=2
             )
 
+    def _handle_enemy_death(self, enemy):
+        """Handle score, particles, drops, and state when enemy dies."""
+        if not enemy.alive():
+            return
+            
+        self.player.add_score(enemy.score_value)
+        from systems.audio import audio
+        audio.play("explosion")
+        self.particles.emit_explosion(enemy.x, enemy.y, enemy.color)
+
+        if isinstance(enemy, Boss):
+            self.particles.emit_boss_defeat(enemy.x, enemy.y)
+            self.effects.start_flash((255, 255, 255), 20)
+            self.effects.start_shake(8, 30)
+            spawn_enemy_drops(enemy.x, enemy.y, self.items, is_boss=True)
+            self.spawner.on_boss_defeated()
+            # If we just moved to stage 2, change music
+            if self.spawner.current_stage == 2:
+                audio.play_music("stage2")
+            
+            # Check victory
+            if self.spawner.game_won:
+                self.state = STATE_VICTORY
+        else:
+            spawn_enemy_drops(enemy.x, enemy.y, self.items, is_boss=False)
+            self.effects.start_shake(2, 5)
+
+        enemy.kill()
+
     def _process_bomb(self):
         """Process bomb: clear bullets and damage enemies."""
         # Expand clearing radius over time
         bomb_progress = 1.0 - (self.player.bomb_timer / 90.0)
         clear_radius = 300 * bomb_progress
 
-        # Clear enemy bullets within radius
-        for bullet in list(self.enemy_bullets):
-            dx = bullet.x - self.player.x
-            dy = bullet.y - self.player.y
-            dist = math.sqrt(dx * dx + dy * dy)
-            if dist < clear_radius:
-                self.particles.emit_sparkle(bullet.x, bullet.y)
-                self.player.add_score(10)
-                bullet.kill()
-
-        # Damage enemies
-        if self.frame_count % 5 == 0:
-            for enemy in self.enemies:
-                dx = enemy.x - self.player.x
-                dy = enemy.y - self.player.y
+        # Clear enemy bullets within radius (only for magical girl)
+        if self.player.character_id == "magical_girl":
+            for bullet in list(self.enemy_bullets):
+                dx = bullet.x - self.player.x
+                dy = bullet.y - self.player.y
                 dist = math.sqrt(dx * dx + dy * dy)
                 if dist < clear_radius:
-                    enemy.take_damage(5)
+                    self.particles.emit_sparkle(bullet.x, bullet.y)
+                    self.player.add_score(10)
+                    bullet.kill()
+
+        # Magical Girl bomb: does NOT damage enemies
+        # Muscular Man bomb: does NOT damage enemies, just self buff/phoenix form
+        pass
 
         # Visual
         if self.player.bomb_timer > 60:

@@ -8,11 +8,15 @@ from entities.bullet import EnemyBullet
 def spawn_bullets(group, x, y, params_list):
     """
     Spawn enemy bullets from a list of parameter tuples.
-    Each tuple: (speed, angle, color_idx, size, bullet_type)
+    Each tuple: (speed, angle, color_idx, size, bullet_type, [opt_x, opt_y])
     """
     for params in params_list:
-        speed, angle, color_idx, size, bullet_type = params
-        bullet = EnemyBullet(x, y, speed, angle, color_idx, size, bullet_type)
+        if len(params) >= 7:
+            speed, angle, color_idx, size, bullet_type, sx, sy = params[:7]
+            bullet = EnemyBullet(sx, sy, speed, angle, color_idx, size, bullet_type)
+        else:
+            speed, angle, color_idx, size, bullet_type = params
+            bullet = EnemyBullet(x, y, speed, angle, color_idx, size, bullet_type)
         group.add(bullet)
 
 

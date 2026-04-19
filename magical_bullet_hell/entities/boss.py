@@ -41,17 +41,19 @@ class Boss(pygame.sprite.Sprite):
 
         # State
         self.entering = True
-        self.alive = True
+        self.is_alive = True
         self.defeated = False
         self.anim_timer = 0
         self.shoot_timer = 0
         self.pattern_timer = 0
         self.pattern_angle = 0.0
         self.move_timer = 0
+        self.status_effects = {}
 
         # Visual
         self.flash_timer = 0
         self.body_color = (220, 140, 255)
+        self.color = self.body_color
         self.glow_color = (255, 180, 255)
 
     @property
@@ -81,12 +83,44 @@ class Boss(pygame.sprite.Sprite):
             return self._next_phase()
         return False
 
+    def apply_status_effect(self, effect_name, duration_frames, damage_percent):
+        from config.settings import FPS
+        self.status_effects[effect_name] = {
+            'timer': duration_frames,
+            'tick_timer': FPS,
+            'damage_percent': damage_percent
+        }
+
+    def process_status_effects(self):
+        """Process active status effects. Returns True if phase ends/boss dies."""
+        from config.settings import FPS
+        effects_to_remove = []
+        phase_ended = False
+        
+        for effect_name, data in self.status_effects.items():
+            data['timer'] -= 1
+            data['tick_timer'] -= 1
+            
+            if data['tick_timer'] <= 0:
+                tick_dmg = self.max_hp * data['damage_percent']
+                if self.take_damage(tick_dmg):
+                    phase_ended = True
+                data['tick_timer'] = FPS
+                
+            if data['timer'] <= 0:
+                effects_to_remove.append(effect_name)
+                
+        for effect_name in effects_to_remove:
+            del self.status_effects[effect_name]
+            
+        return phase_ended
+
     def _next_phase(self):
         """Advance to next phase. Returns True if boss is defeated."""
         self.phase += 1
         if self.phase >= self.max_phases:
             self.defeated = True
-            self.alive = False
+            self.is_alive = False
             return True
 
         self.hp = int(BOSS_PHASE_HP[self.phase] * self.difficulty_mult)

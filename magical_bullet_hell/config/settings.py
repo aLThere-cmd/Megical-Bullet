@@ -1,13 +1,10 @@
-"""
-Game settings and constants for Magical Girl Bullet Hell.
-"""
 import pygame
+from config.manager import settings_manager
 
 # =============================================================================
 # Window & Display
 # =============================================================================
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 720
+WINDOW_WIDTH, WINDOW_HEIGHT = settings_manager.get_resolution()
 PLAYFIELD_WIDTH = 540
 PLAYFIELD_HEIGHT = 680
 PLAYFIELD_X = (WINDOW_WIDTH - PLAYFIELD_WIDTH) // 2 - 150
@@ -48,6 +45,15 @@ BULLET_COLORS = [
     (140, 200, 255),   # Light blue
 ]
 
+# Character 2: Muscular Man colors
+COLOR_PLAYER2_BODY = (100, 60, 40)   # Dark skin
+COLOR_PLAYER2_SHIRT = (255, 140, 0)  # Orange tank top
+COLOR_PLAYER2_HEAD = (255, 240, 200) # Chicken head
+COLOR_PLAYER2_COMB = (255, 50, 50)   # Chicken comb (red)
+COLOR_FIREBALL = (255, 100, 50)
+COLOR_BLUE_FLAME = (100, 180, 255)
+
+
 # Enemy colors
 COLOR_FAIRY = (180, 220, 255)
 COLOR_WITCH = (220, 160, 255)
@@ -67,6 +73,36 @@ COLOR_HEALTH_FILL2 = (255, 180, 200)
 # Particle colors
 COLOR_PARTICLE_STAR = (255, 255, 200)
 COLOR_PARTICLE_SPARKLE = (255, 200, 255)
+
+# =============================================================================
+# Characters
+# =============================================================================
+CHARACTERS = [
+    {
+        "id": "magical_girl",
+        "name": "Magical Girl",
+        "color": COLOR_PLAYER_BODY,
+        "image_path": "assets/magical_girl.png",
+        "skills": {
+            "Passive": "Standard (Start with 3 Lives)",
+            "Normal": "Homing sine wave projectiles",
+            "Focus": "High-damage concentrated laser",
+            "Bomb": "Flex! Clears projectiles & +30% Damage Buff"
+        }
+    },
+    {
+        "id": "muscular_man",
+        "name": "Muscular Man",
+        "color": COLOR_PLAYER2_SHIRT,
+        "image_path": "assets/muscular_man.png",
+        "skills": {
+            "Passive": "Start with +2 Extra Lives",
+            "Normal": "Fireball (Applies Burn 5% HP/sec)",
+            "Focus": "Fire Breath (Applies Blue Flame 10% HP/sec)",
+            "Bomb": "Phoenix Form (Invincible for 15s & +30% Damage)"
+        }
+    }
+]
 
 # =============================================================================
 # Player Settings
@@ -100,6 +136,13 @@ ENEMY_BULLET_SPEED_MEDIUM = 3.5
 ENEMY_BULLET_SPEED_FAST = 5.0
 
 BULLET_OFFSCREEN_MARGIN = 40
+
+# =============================================================================
+# Status Effect Settings
+# =============================================================================
+BURN_DAMAGE_PERCENT = 0.05
+BLUE_FLAME_DAMAGE_PERCENT = 0.10
+BOSS_STATUS_DAMAGE_MULT = 0.4  # Reduction factor for bosses (40% of original dmg)
 
 # =============================================================================
 # Enemy Settings
@@ -154,18 +197,20 @@ GRAZE_POWER = 0.01
 DIFFICULTY = {
     "Easy":    {"speed_mult": 0.7, "density_mult": 0.6, "hp_mult": 0.7, "score_mult": 0.5},
     "Normal":  {"speed_mult": 1.0, "density_mult": 1.0, "hp_mult": 1.0, "score_mult": 1.0},
-    "Hard":    {"speed_mult": 1.3, "density_mult": 1.4, "hp_mult": 1.5, "score_mult": 1.5},
-    "Lunatic": {"speed_mult": 1.6, "density_mult": 1.8, "hp_mult": 2.0, "score_mult": 2.0},
+    "Hard":    {"speed_mult": 1.3, "density_mult": 2.0, "hp_mult": 2.2, "score_mult": 2.0},
+    "Chaotic": {"speed_mult": 1.7, "density_mult": 3.5, "hp_mult": 4.0, "score_mult": 4.0},
 }
 
 # =============================================================================
 # Key Bindings
 # =============================================================================
-KEY_UP = pygame.K_w
-KEY_DOWN = pygame.K_s
-KEY_LEFT = pygame.K_a
-KEY_RIGHT = pygame.K_d
-KEY_SHOOT = pygame.K_j
-KEY_BOMB = pygame.K_k
-KEY_FOCUS = pygame.K_LSHIFT
-KEY_PAUSE = pygame.K_ESCAPE
+KEY_UP = settings_manager.get_key("up")
+KEY_DOWN = settings_manager.get_key("down")
+KEY_LEFT = settings_manager.get_key("left")
+KEY_RIGHT = settings_manager.get_key("right")
+KEY_SHOOT = settings_manager.get_key("shoot")
+KEY_BOMB = settings_manager.get_key("bomb")
+KEY_FOCUS = settings_manager.get_key("focus")
+KEY_PAUSE = settings_manager.get_key("pause")
+KEY_FULLSCREEN = pygame.K_F11
+

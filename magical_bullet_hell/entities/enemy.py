@@ -31,6 +31,7 @@ class Enemy(pygame.sprite.Sprite):
         self.shoot_timer = random.randint(0, shoot_delay)
         self.anim_timer = random.randint(0, 100)
         self.alive_timer = 0
+        self.status_effects = {}
 
         # Movement
         self.vx = 0.0
@@ -52,6 +53,45 @@ class Enemy(pygame.sprite.Sprite):
         """Take damage, return True if destroyed."""
         self.hp -= damage
         return self.hp <= 0
+
+    def apply_status_effect(self, effect_name, duration_frames, damage_percent):
+        """Apply a status effect. Now supports stacking by allowing multiple entries of the same type."""
+        from config.settings import FPS
+        if effect_name not in self.status_effects:
+            self.status_effects[effect_name] = []
+            
+        self.status_effects[effect_name].append({
+            'timer': duration_frames,
+            'tick_timer': FPS,
+            'damage_percent': damage_percent
+        })
+
+    def process_status_effects(self):
+        """Process all active status effect stacks. Returns True if enemy dies."""
+        from config.settings import FPS
+        died = False
+        
+        for effect_name, stacks in list(self.status_effects.items()):
+            active_stacks = []
+            for data in stacks:
+                data['timer'] -= 1
+                data['tick_timer'] -= 1
+                
+                if data['tick_timer'] <= 0:
+                    tick_dmg = self.max_hp * data['damage_percent']
+                    if self.take_damage(tick_dmg):
+                        died = True
+                    data['tick_timer'] = FPS
+                    
+                if data['timer'] > 0:
+                    active_stacks.append(data)
+            
+            if active_stacks:
+                self.status_effects[effect_name] = active_stacks
+            else:
+                del self.status_effects[effect_name]
+                
+        return died
 
     def can_shoot(self):
         """Check if enemy can fire."""
@@ -120,9 +160,16 @@ class Fairy(Enemy):
 
     def get_bullet_params(self, player_x, player_y):
         angle = angle_to(self.x, self.y, player_x, player_y)
-        return [
-            (ENEMY_BULLET_SPEED_SLOW * self.difficulty_mult, angle, 1, 4, "circle"),
-        ]
+        params = []
+        if self.difficulty_mult >= 1.5:
+            # 3-way aimed spread for harder difficulties
+            spread = 0.2
+            params.append((ENEMY_BULLET_SPEED_SLOW * self.difficulty_mult, angle - spread, 1, 4, "circle"))
+            params.append((ENEMY_BULLET_SPEED_SLOW * self.difficulty_mult, angle, 1, 4, "circle"))
+            params.append((ENEMY_BULLET_SPEED_SLOW * self.difficulty_mult, angle + spread, 1, 4, "circle"))
+        else:
+            params.append((ENEMY_BULLET_SPEED_SLOW * self.difficulty_mult, angle, 1, 4, "circle"))
+        return params
 
     def _draw_sprite(self):
         self.image = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
@@ -159,7 +206,9 @@ class Witch(Enemy):
 
     def get_bullet_params(self, player_x, player_y):
         params = []
-        count = 3 + int(self.difficulty_mult)
+        # Scale count with difficulty
+        count = int(3 + (self.difficulty_mult - 1) * 4)
+        count = max(3, count)
         for i in range(count):
             angle = self.spiral_angle + (2 * math.pi * i / count)
             params.append(
@@ -197,12 +246,16 @@ class Spirit(Enemy):
 
     def get_bullet_params(self, player_x, player_y):
         angle = angle_to(self.x, self.y, player_x, player_y)
-        spread = 0.15
-        return [
-            (ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle - spread, 4, 4, "diamond"),
-            (ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle, 4, 4, "diamond"),
-            (ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle + spread, 4, 4, "diamond"),
-        ]
+        params = []
+        # More clusters for high difficulty
+        clusters = 1 + int((self.difficulty_mult - 1) * 1.5)
+        for c in range(clusters):
+            offset = (c - (clusters-1)/2) * 0.1
+            spread = 0.15
+            params.append((ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle + offset - spread, 4, 4, "diamond"))
+            params.append((ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle + offset, 4, 4, "diamond"))
+            params.append((ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle + offset + spread, 4, 4, "diamond"))
+        return params
 
     def _draw_sprite(self):
         self.image = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
@@ -222,3 +275,74 @@ class Spirit(Enemy):
             alpha = 150 - i * 45
             pygame.draw.circle(self.image, (*self.color, max(0, alpha)),
                                (cx, ty), 3 - i)
+
+
+class Slime(Enemy):
+    """Bouncing enemy - erratic movement."""
+
+    def __init__(self, x, y, target_x, target_y, difficulty_mult=1.0):
+        hp = int(40 * difficulty_mult)
+        super().__init__(x, y, hp, 250, (100, 255, 150), 80)
+        self.target_x = target_x
+        self.target_y = target_y
+        self.difficulty_mult = difficulty_mult
+        self.enter_speed = 1.0
+
+    def update_movement(self):
+        super().update_movement()
+        if self.move_phase == 1:
+            # Bounce
+            self.y += math.sin(self.anim_timer * 0.1) * 1.5
+            self.x += math.cos(self.anim_timer * 0.05) * 2.0
+
+    def get_bullet_params(self, player_x, player_y):
+        angle = angle_to(self.x, self.y, player_x, player_y)
+        return [
+            (3.0 * self.difficulty_mult, angle - 0.2, 5, 5, "circle"),
+            (3.0 * self.difficulty_mult, angle, 5, 5, "circle"),
+            (3.0 * self.difficulty_mult, angle + 0.2, 5, 5, "circle"),
+        ]
+
+    def _draw_sprite(self):
+        self.image = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
+        cx, cy = self.sprite_size // 2, self.sprite_size // 2
+        
+        # Stretch/squash animation
+        stretch = 1.0 + 0.2 * math.sin(self.anim_timer * 0.1)
+        width = int(12 * (2.0 - stretch))
+        height = int(12 * stretch)
+        
+        pygame.draw.ellipse(self.image, self.color, (cx - width, cy - height + 4, width * 2, height * 2))
+        pygame.draw.circle(self.image, (255, 255, 255), (cx - 4, cy - 2), 2)
+        pygame.draw.circle(self.image, (255, 255, 255), (cx + 4, cy - 2), 2)
+
+
+class AquaSpirit(Enemy):
+    """Fast water spirit - rapid bursts."""
+
+    def __init__(self, x, y, target_x, target_y, difficulty_mult=1.0):
+        hp = int(35 * difficulty_mult)
+        super().__init__(x, y, hp, 350, (100, 200, 255), 40)
+        self.target_x = target_x
+        self.target_y = target_y
+        self.difficulty_mult = difficulty_mult
+        self.enter_speed = 3.0
+
+    def get_bullet_params(self, player_x, player_y):
+        angle = angle_to(self.x, self.y, player_x, player_y)
+        return [
+            (5.0 * self.difficulty_mult, angle, 4, 3, "diamond"),
+        ]
+
+    def _draw_sprite(self):
+        self.image = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
+        cx, cy = self.sprite_size // 2, self.sprite_size // 2
+        
+        # Swirling water effect
+        for i in range(2):
+            angle = self.anim_timer * 0.2 + i * math.pi
+            px = cx + math.cos(angle) * 8
+            py = cy + math.sin(angle) * 8
+            draw_glow_circle(self.image, self.color, (int(px), int(py)), 6, 0.4)
+        
+        pygame.draw.circle(self.image, (255, 255, 255), (cx, cy), 4)

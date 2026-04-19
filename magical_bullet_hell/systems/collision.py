@@ -73,6 +73,18 @@ def check_player_bullet_enemy_collision(player_bullets, enemies, particles):
             dist = distance(bullet.x, bullet.y, enemy.x, enemy.y)
             if dist < enemy.radius + bullet.radius:
                 killed = enemy.take_damage(bullet.damage)
+                
+                if hasattr(bullet, 'status_effect') and bullet.status_effect:
+                    from config.settings import FPS, BURN_DAMAGE_PERCENT, BLUE_FLAME_DAMAGE_PERCENT, BOSS_STATUS_DAMAGE_MULT
+                    from entities.boss import Boss
+                    
+                    dmg_mult = BOSS_STATUS_DAMAGE_MULT if isinstance(enemy, Boss) else 1.0
+                    
+                    if bullet.status_effect == "burn":
+                        enemy.apply_status_effect("burn", 3 * FPS, BURN_DAMAGE_PERCENT * dmg_mult)
+                    elif bullet.status_effect == "blue_flame":
+                        enemy.apply_status_effect("blue_flame", 5 * FPS, BLUE_FLAME_DAMAGE_PERCENT * dmg_mult)
+                        
                 bullet.kill()
                 particles.emit_sparkle(bullet.x, bullet.y, bullet.color)
                 if killed:

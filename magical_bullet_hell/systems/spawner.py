@@ -7,8 +7,9 @@ from config.settings import (
     PLAYFIELD_X, PLAYFIELD_Y, PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT,
     WAVE_INTERVAL, BOSS_TRIGGER_WAVE, DIFFICULTY_SCALE_RATE,
 )
-from entities.enemy import Fairy, Witch, Spirit
+from entities.enemy import Fairy, Witch, Spirit, Slime, AquaSpirit
 from entities.boss import Boss
+from entities.boss_water import WaterBoss
 
 
 class Spawner:
@@ -27,12 +28,14 @@ class Spawner:
         self.boss = None
         self.boss_active = False
         self.boss_defeated = False
+        self.current_stage = 1
         self.game_won = False
 
     @property
     def current_difficulty(self):
         """Get current difficulty multiplier (increases over time)."""
-        return self.difficulty_mult * (1.0 + self.wave_count * DIFFICULTY_SCALE_RATE)
+        stage_mult = 1.0 + (self.current_stage - 1) * 0.5
+        return self.difficulty_mult * (1.0 + self.wave_count * DIFFICULTY_SCALE_RATE) * stage_mult
 
     def update(self):
         """Update spawner, spawn waves when ready."""
@@ -43,8 +46,8 @@ class Spawner:
         if self.wave_timer <= 0:
             self.wave_count += 1
 
-            if self.wave_count >= BOSS_TRIGGER_WAVE and not self.boss_defeated:
-                # Spawn boss
+            if self.wave_count >= BOSS_TRIGGER_WAVE:
+                # Spawn boss for current stage
                 return self._spawn_boss()
             else:
                 self._spawn_wave()
@@ -53,13 +56,17 @@ class Spawner:
         return None
 
     def _spawn_wave(self):
-        """Spawn a wave of enemies."""
+        """Spawn a wave of enemies based on current stage."""
         diff = self.current_difficulty
-        wave_type = random.choices(
-            ["fairy_line", "fairy_v", "witch_pair", "spirit_rush", "mixed"],
-            weights=[30, 20, 15, 10, 25],
-            k=1
-        )[0]
+        
+        if self.current_stage == 1:
+            wave_types = ["fairy_line", "fairy_v", "witch_pair", "spirit_rush", "mixed"]
+            weights = [30, 20, 15, 10, 25]
+        else: # Stage 2
+            wave_types = ["slime_bounce", "aqua_rush", "mixed_water", "spirit_rush"]
+            weights = [35, 30, 25, 10]
+            
+        wave_type = random.choices(wave_types, weights=weights, k=1)[0]
 
         if wave_type == "fairy_line":
             self._spawn_fairy_line(diff)
@@ -71,6 +78,12 @@ class Spawner:
             self._spawn_spirit_rush(diff)
         elif wave_type == "mixed":
             self._spawn_mixed(diff)
+        elif wave_type == "slime_bounce":
+            self._spawn_slime_bounce(diff)
+        elif wave_type == "aqua_rush":
+            self._spawn_aqua_rush(diff)
+        elif wave_type == "mixed_water":
+            self._spawn_mixed_water(diff)
 
     def _spawn_fairy_line(self, diff):
         """Line of fairies from one side."""
@@ -144,19 +157,50 @@ class Spawner:
         else:
             self._spawn_spirit_rush(diff * 0.9)
 
+    def _spawn_slime_bounce(self, diff):
+        """Group of slimes."""
+        count = int(3 * self.density_mult)
+        for i in range(count):
+            sx = PLAYFIELD_X + (i + 1) * (PLAYFIELD_WIDTH / (count + 1))
+            sy = PLAYFIELD_Y - 30
+            tx = sx
+            ty = PLAYFIELD_Y + 120
+            self.enemy_group.add(Slime(sx, sy, tx, ty, diff))
+
+    def _spawn_aqua_rush(self, diff):
+        """Rapid aqua spirits."""
+        count = int(4 * self.density_mult)
+        for i in range(count):
+            sx = PLAYFIELD_X + random.randint(0, PLAYFIELD_WIDTH)
+            sy = PLAYFIELD_Y - 20
+            tx = sx + random.randint(-50, 50)
+            ty = PLAYFIELD_Y + 100 + i * 30
+            self.enemy_group.add(AquaSpirit(sx, sy, tx, ty, diff))
+
+    def _spawn_mixed_water(self, diff):
+        self._spawn_slime_bounce(diff * 0.8)
+        self._spawn_aqua_rush(diff * 0.8)
+
     def _spawn_boss(self):
-        """Spawn the boss."""
-        self.boss = Boss(self.current_difficulty)
+        """Spawn the boss for current stage."""
+        if self.current_stage == 1:
+            self.boss = Boss(self.current_difficulty)
+        else:
+            self.boss = WaterBoss(self.current_difficulty)
+            
         self.boss_active = True
         self.enemy_group.add(self.boss)
         return self.boss
 
     def on_boss_defeated(self):
-        """Called when boss is defeated."""
+        """Called when boss is defeated. Advance stage or win."""
         self.boss_active = False
-        self.boss_defeated = True
         self.boss = None
-        self.wave_count = 0
-        self.wave_timer = 180
-        # Game continues with harder waves or can end
-        self.game_won = True
+        
+        if self.current_stage == 1:
+            self.current_stage = 2
+            self.wave_count = 0
+            self.wave_timer = 240 # Longer break between stages
+        else:
+            self.boss_defeated = True
+            self.game_won = True

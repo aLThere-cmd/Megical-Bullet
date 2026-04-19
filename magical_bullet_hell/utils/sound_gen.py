@@ -107,5 +107,51 @@ def generate_all_sounds(out_dir):
     generate_wav(os.path.join(out_dir, "death.wav"), samples)
 
 
+def generate_music(track_name, filename):
+    """Generate a simple looping 8-bit style music track."""
+    sr = 44100
+    duration = 8.0 # 8 seconds loop
+    num_samples = int(sr * duration)
+    samples = []
+    
+    # Simple melody sequences
+    if "boss" in track_name:
+        # Fast, intense melody
+        notes = [440, 466, 440, 392, 440, 466, 493, 523]
+        speed = 0.2
+    elif "stage1" in track_name:
+        # Magical, light melody
+        notes = [523, 659, 783, 1046, 783, 659]
+        speed = 0.4
+    else: # stage2 (Water)
+        # Slower, flowing melody
+        notes = [349, 440, 523, 698, 523, 440]
+        speed = 0.6
+        
+    for i in range(num_samples):
+        t = i / sr
+        
+        # Determine current note
+        note_idx = int((t / speed) % len(notes))
+        freq = notes[note_idx]
+        
+        # Base wave (Triangle for smoother retro sound)
+        phase = 2 * math.pi * freq * t
+        s = 2.0 * abs(2.0 * (phase / (2 * math.pi) - math.floor(phase / (2 * math.pi) + 0.5))) - 1.0
+        
+        # Add simple bass line
+        bass_freq = notes[0] / 4
+        bass_phase = 2 * math.pi * bass_freq * t
+        s += 0.5 * math.sin(bass_phase)
+        
+        # Envelope to avoid clicks
+        note_t = (t % speed) / speed
+        envelope = math.sin(note_t * math.pi)
+        
+        samples.append(s * 0.1 * envelope)
+        
+    generate_wav(filename, samples)
+
+
 if __name__ == "__main__":
     generate_all_sounds("assets/sounds")
