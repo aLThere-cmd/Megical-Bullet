@@ -11,6 +11,7 @@ from config.settings import (
     ENEMY_SPIRIT_HP, ENEMY_SPIRIT_SCORE, ENEMY_SPIRIT_SHOOT_DELAY,
     COLOR_FAIRY, COLOR_WITCH, COLOR_SPIRIT,
     ENEMY_BULLET_SPEED_SLOW, ENEMY_BULLET_SPEED_MEDIUM, ENEMY_BULLET_SPEED_FAST,
+    FPS, STATUS_TICK_RATE
 )
 from utils.renderer import draw_glow_circle, draw_star, draw_diamond
 from utils.math_helpers import angle_to, wave_value
@@ -39,9 +40,9 @@ class Enemy(pygame.sprite.Sprite):
         self.target_x = x
         self.target_y = y
         self.move_phase = 0  # 0=enter, 1=idle, 2=exit
-        self.enter_speed = 1.5
+        self.enter_speed = 3.5  # Faster entry
         self.idle_timer = 0
-        self.idle_duration = 180 + random.randint(0, 120)
+        self.idle_duration = random.randint(600, 1200)  # 10-20 seconds
 
         # Visual
         self.sprite_size = 32
@@ -56,13 +57,13 @@ class Enemy(pygame.sprite.Sprite):
 
     def apply_status_effect(self, effect_name, duration_frames, damage_percent):
         """Apply a status effect. Now supports stacking by allowing multiple entries of the same type."""
-        from config.settings import FPS
+        tick_frames = int(STATUS_TICK_RATE * FPS)
         if effect_name not in self.status_effects:
             self.status_effects[effect_name] = []
             
         self.status_effects[effect_name].append({
             'timer': duration_frames,
-            'tick_timer': FPS,
+            'tick_timer': tick_frames,
             'damage_percent': damage_percent
         })
 
@@ -81,7 +82,7 @@ class Enemy(pygame.sprite.Sprite):
                     tick_dmg = self.max_hp * data['damage_percent']
                     if self.take_damage(tick_dmg):
                         died = True
-                    data['tick_timer'] = FPS
+                    data['tick_timer'] = int(STATUS_TICK_RATE * FPS)
                     
                 if data['timer'] > 0:
                     active_stacks.append(data)

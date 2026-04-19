@@ -140,9 +140,10 @@ BULLET_OFFSCREEN_MARGIN = 40
 # =============================================================================
 # Status Effect Settings
 # =============================================================================
-BURN_DAMAGE_PERCENT = 0.05
-BLUE_FLAME_DAMAGE_PERCENT = 0.10
+BURN_DAMAGE_PERCENT = 0.06
+BLUE_FLAME_DAMAGE_PERCENT = 0.12
 BOSS_STATUS_DAMAGE_MULT = 0.4  # Reduction factor for bosses (40% of original dmg)
+STATUS_TICK_RATE = 0.5         # seconds between ticks
 
 # =============================================================================
 # Enemy Settings
@@ -198,7 +199,7 @@ DIFFICULTY = {
     "Easy":    {"speed_mult": 0.7, "density_mult": 0.6, "hp_mult": 0.7, "score_mult": 0.5},
     "Normal":  {"speed_mult": 1.0, "density_mult": 1.0, "hp_mult": 1.0, "score_mult": 1.0},
     "Hard":    {"speed_mult": 1.15, "density_mult": 1.4, "hp_mult": 1.5, "score_mult": 2.0},
-    "Chaotic": {"speed_mult": 1.7, "density_mult": 3.5, "hp_mult": 4.5, "score_mult": 5.0},
+    "Chaotic": {"speed_mult": 1.5, "density_mult": 3.5, "hp_mult": 4.5, "score_mult": 5.0},
 }
 
 # =============================================================================
