@@ -74,27 +74,31 @@ class Item(pygame.sprite.Sprite):
         cx, cy = self.sprite_size // 2, self.sprite_size // 2
 
         pulse = 0.7 + 0.3 * math.sin(self.anim_timer * 0.15)
-
+        
         # Glow
-        glow_r = int(8 * pulse)
-        pygame.draw.circle(self.image, (*self.color[:3], 50), (cx, cy), glow_r)
+        glow_r = int(10 * pulse)
+        pygame.draw.circle(self.image, (*self.color[:3], 40), (cx, cy), glow_r)
 
-        if self.item_type in ("power", "big_power"):
+        if self.item_type == "point":
+            # Gold Coin with 'P'
+            coin_color = (255, 215, 0) # Gold
+            border_color = (200, 160, 0)
+            pygame.draw.circle(self.image, border_color, (cx, cy), 7)
+            pygame.draw.circle(self.image, coin_color, (cx, cy), 6)
+            # Draw 'P'
+            font = pygame.font.Font(None, 16)
+            text = font.render("P", True, (100, 70, 0))
+            self.image.blit(text, text.get_rect(center=(cx, cy)))
+        elif self.item_type in ("power", "big_power"):
             # Red P shape (diamond)
             size = 5 if self.item_type == "power" else 7
             draw_diamond(self.image, self.color, (cx, cy), size)
-        elif self.item_type == "point":
-            # Blue dot
-            pygame.draw.circle(self.image, self.color, (cx, cy), 4)
-            pygame.draw.circle(self.image, (200, 240, 255), (cx, cy), 2)
         elif self.item_type == "life":
             # Pink star
-            draw_star(self.image, self.color, (cx, cy), 6, 3, 5,
-                      self.anim_timer * 0.05)
+            draw_star(self.image, self.color, (cx, cy), 7, 4, 5, self.anim_timer * 0.05)
         elif self.item_type == "bomb":
             # Green star
-            draw_star(self.image, self.color, (cx, cy), 6, 3, 4,
-                      self.anim_timer * 0.04)
+            draw_star(self.image, self.color, (cx, cy), 7, 4, 4, self.anim_timer * 0.04)
 
     def collect(self, player):
         """Apply item effect to player."""

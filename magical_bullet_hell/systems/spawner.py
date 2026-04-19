@@ -26,9 +26,8 @@ class Spawner:
         self.speed_mult = difficulty_settings["speed_mult"]
         self.density_mult = difficulty_settings["density_mult"]
         
-        # Scaling boss trigger wave
-        diff_scale = {"Easy": 0.7, "Normal": 1.0, "Hard": 1.25, "Chaotic": 1.6}.get(difficulty_name, 1.0)
-        self.boss_trigger = int(BOSS_TRIGGER_WAVE * diff_scale)
+        # Uniform boss trigger wave for all difficulties
+        self.boss_trigger = BOSS_TRIGGER_WAVE
 
         self.boss = None
         self.boss_active = False

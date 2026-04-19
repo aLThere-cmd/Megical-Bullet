@@ -52,7 +52,7 @@ class Player(pygame.sprite.Sprite):
         self.dead = False
         self.death_timer = 0
         self.anim_timer = 0
-        self.base_damage_mult = 0.15 if self.character_id == "magical_girl" else 1.0
+        self.base_damage_mult = 0.20 if self.character_id == "magical_girl" else 1.0
         self.damage_multiplier = self.base_damage_mult
         
         # Apply passives
@@ -105,7 +105,8 @@ class Player(pygame.sprite.Sprite):
 
         # Bomb
         if keys[KEY_BOMB]:
-            self.use_bomb()
+            return self.use_bomb()
+        return False
 
     def use_bomb(self):
         """Activate spell card (bomb)."""

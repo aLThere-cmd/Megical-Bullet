@@ -224,7 +224,19 @@ class Game:
         """Update all gameplay systems."""
         # Player input
         keys = pygame.key.get_pressed()
-        self.player.handle_input(keys)
+        bomb_triggered = self.player.handle_input(keys)
+        
+        if bomb_triggered:
+            spell_names = {
+                "magical_girl": "Star Light ~ Galaxy Burst",
+                "muscular_man": "Giga Muscle ~ Phoenix Ascension"
+            }
+            name = spell_names.get(self.player.character_id, "Special Move")
+            self.effects.start_cutin(self.player.character_id, name)
+            
+            # Start bomb visual here instead of in _process_bomb to avoid re-triggering
+            self.effects.start_bomb_visual(self.player.x, self.player.y, 90)
+            self.effects.start_flash((255, 200, 255), 10)
 
         # Update entities
         self.player.update()
@@ -387,12 +399,8 @@ class Game:
 
     def _process_bomb(self):
         """Process bomb: clear bullets and damage enemies."""
-        # Expand clearing radius over time (faster for better feel)
-        bomb_duration = 90.0
-        bomb_progress = 1.0 - (self.player.bomb_timer / bomb_duration)
-        # Faster expansion: reaches max radius in 0.5s (30 frames)
-        expansion_t = min(1.0, bomb_progress * 3.0)
-        clear_radius = max(WINDOW_WIDTH, WINDOW_HEIGHT) * expansion_t
+        # Instant expansion: max radius from frame 1
+        clear_radius = max(WINDOW_WIDTH, WINDOW_HEIGHT) * 1.5
 
         # Clear enemy bullets within radius (only for magical girl)
         if self.player.character_id == "magical_girl":
@@ -405,14 +413,20 @@ class Game:
                     self.player.add_score(10)
                     bullet.kill()
 
-        # Magical Girl bomb: does NOT damage enemies
-        # Muscular Man bomb: does NOT damage enemies, just self buff/phoenix form
-        pass
+        # Magical Girl bomb: Damage all enemies on screen
+        if self.player.character_id == "magical_girl":
+            # Only apply damage once or every few frames? 
+            # I'll apply a steady stream of damage while bombing
+            bomb_damage = 0.5 # Damage per frame
+            for enemy in self.enemies:
+                enemy.take_damage(bomb_damage)
+                # Visual feedback for damage
+                if self.frame_count % 10 == 0:
+                    self.particles.emit_sparkle(enemy.x, enemy.y, (255, 255, 255), 1)
 
         # Visual
-        if self.player.bomb_timer > 60:
-            self.effects.start_bomb_visual(self.player.x, self.player.y, 90)
-            self.effects.start_flash((255, 200, 255), 5)
+        # Visual removed from here to avoid constant re-triggering
+        # self.effects.start_bomb_visual(...) was here
 
         self.particles.emit_bomb_effect(
             self.player.x, self.player.y,
@@ -461,11 +475,11 @@ class Game:
         # Particles
         self.particles.draw(self.screen, ox, oy)
 
-        # Effects on playfield
-        self.effects.draw(self.screen, ox, oy)
-
         # Reset clipping rect
         self.screen.set_clip(None)
+
+        # Effects (Flash and Cut-in are full-screen, Dim and Bomb are playfield-relative)
+        self.effects.draw(self.screen, ox, oy)
 
         # Playfield border
         border_rect = pygame.Rect(PLAYFIELD_X + ox - 2, PLAYFIELD_Y + oy - 2,
