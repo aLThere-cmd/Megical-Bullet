@@ -113,9 +113,9 @@ class Player(pygame.sprite.Sprite):
                 self.bomb_timer = PLAYER_BOMB_DURATION
                 self.invincible_timer = max(self.invincible_timer, PLAYER_BOMB_INVINCIBLE)
             elif self.character_id == "muscular_man":
-                # Phoenix form lasts 15 seconds (15 * 60 = 900 frames)
-                self.bomb_timer = 900
-                self.invincible_timer = max(self.invincible_timer, 900)
+                # Phoenix form lasts 5 seconds
+                self.bomb_timer = PLAYER_BOMB_DURATION
+                self.invincible_timer = max(self.invincible_timer, PLAYER_BOMB_DURATION)
                 
             self.damage_multiplier = 1.3
             from systems.audio import audio
@@ -124,9 +124,17 @@ class Player(pygame.sprite.Sprite):
         return False
 
     def die(self):
-        """Player death."""
+        """Player death. Auto-bomb if possible."""
         if self.invincible_timer > 0:
             return False
+            
+        # AUTO-BOMB
+        if self.bombs > 0 and not self.is_bombing:
+            if self.use_bomb():
+                # Flash or effect for auto-bomb
+                self.invincible_timer = max(self.invincible_timer, 60)
+                return False
+
         self.lives -= 1
         self.dead = True
         self.death_timer = 60
@@ -139,6 +147,8 @@ class Player(pygame.sprite.Sprite):
         self.x = float(PLAYFIELD_X + PLAYFIELD_WIDTH // 2)
         self.y = float(PLAYFIELD_Y + PLAYFIELD_HEIGHT - PLAYER_RESPAWN_Y_OFFSET)
         self.invincible_timer = PLAYER_INVINCIBLE_TIME
+        # Reset bombs to 1 per life
+        self.bombs = 1
         self.bomb_timer = 0
 
     def shoot(self):
@@ -165,10 +175,9 @@ class Player(pygame.sprite.Sprite):
 
     def _shoot_spread(self, power_level):
         """Unfocused spread shot pattern."""
-        speed = PLAYER_BULLET_SPEED
-        damage = PLAYER_BULLET_DAMAGE * self.damage_multiplier
-        
         move_type = "homing_sine" if self.character_id == "magical_girl" else "linear"
+        # Muscular man does 0 impact damage, only applies status effect
+        damage = (PLAYER_BULLET_DAMAGE * self.damage_multiplier) if self.character_id != "muscular_man" else 0
         stat_effect = "burn" if self.character_id == "muscular_man" else None
 
         # Central shot always

@@ -113,13 +113,13 @@ PLAYER_HITBOX_RADIUS = 3
 PLAYER_GRAZE_RADIUS = 24
 PLAYER_COLLECT_RADIUS = 30
 PLAYER_START_LIVES = 3
-PLAYER_START_BOMBS = 3
+PLAYER_START_BOMBS = 1
 PLAYER_START_POWER = 1.0
 PLAYER_MAX_POWER = 4.0
 PLAYER_SHOOT_DELAY = 4        # frames between shots
 PLAYER_FOCUS_SHOOT_DELAY = 5
 PLAYER_INVINCIBLE_TIME = 180  # frames (3 seconds)
-PLAYER_BOMB_DURATION = 90     # frames
+PLAYER_BOMB_DURATION = 300     # 5 seconds
 PLAYER_BOMB_INVINCIBLE = 150  # frames
 PLAYER_RESPAWN_Y_OFFSET = 100
 
@@ -197,8 +197,8 @@ GRAZE_POWER = 0.01
 DIFFICULTY = {
     "Easy":    {"speed_mult": 0.7, "density_mult": 0.6, "hp_mult": 0.7, "score_mult": 0.5},
     "Normal":  {"speed_mult": 1.0, "density_mult": 1.0, "hp_mult": 1.0, "score_mult": 1.0},
-    "Hard":    {"speed_mult": 1.3, "density_mult": 2.0, "hp_mult": 2.2, "score_mult": 2.0},
-    "Chaotic": {"speed_mult": 1.7, "density_mult": 3.5, "hp_mult": 4.0, "score_mult": 4.0},
+    "Hard":    {"speed_mult": 1.15, "density_mult": 1.4, "hp_mult": 1.5, "score_mult": 2.0},
+    "Chaotic": {"speed_mult": 1.35, "density_mult": 2.0, "hp_mult": 2.2, "score_mult": 4.0},
 }
 
 # =============================================================================
