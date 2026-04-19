@@ -199,7 +199,7 @@ DIFFICULTY = {
     "Easy":    {"speed_mult": 0.7, "density_mult": 0.6, "hp_mult": 0.7, "score_mult": 0.5},
     "Normal":  {"speed_mult": 1.0, "density_mult": 1.0, "hp_mult": 1.0, "score_mult": 1.0},
     "Hard":    {"speed_mult": 1.15, "density_mult": 1.4, "hp_mult": 1.5, "score_mult": 2.0},
-    "Chaotic": {"speed_mult": 1.5, "density_mult": 3.5, "hp_mult": 4.5, "score_mult": 5.0},
+    "Chaotic": {"speed_mult": 1.3, "density_mult": 3.5, "hp_mult": 4.5, "score_mult": 5.0},
 }
 
 # =============================================================================

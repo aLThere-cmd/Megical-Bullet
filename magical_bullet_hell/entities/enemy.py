@@ -248,14 +248,11 @@ class Spirit(Enemy):
     def get_bullet_params(self, player_x, player_y):
         angle = angle_to(self.x, self.y, player_x, player_y)
         params = []
-        # More clusters for high difficulty
-        clusters = 1 + int((self.difficulty_mult - 1) * 1.5)
+        # Fewer clusters for high difficulty
+        clusters = 1 + int((self.difficulty_mult - 1) * 0.7)
         for c in range(clusters):
-            offset = (c - (clusters-1)/2) * 0.1
-            spread = 0.15
-            params.append((ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle + offset - spread, 4, 4, "diamond"))
+            offset = (c - (clusters-1)/2) * 0.15
             params.append((ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle + offset, 4, 4, "diamond"))
-            params.append((ENEMY_BULLET_SPEED_FAST * self.difficulty_mult * 0.8, angle + offset + spread, 4, 4, "diamond"))
         return params
 
     def _draw_sprite(self):
@@ -298,11 +295,13 @@ class Slime(Enemy):
 
     def get_bullet_params(self, player_x, player_y):
         angle = angle_to(self.x, self.y, player_x, player_y)
-        return [
-            (3.0 * self.difficulty_mult, angle - 0.2, 5, 5, "circle"),
-            (3.0 * self.difficulty_mult, angle, 5, 5, "circle"),
-            (3.0 * self.difficulty_mult, angle + 0.2, 5, 5, "circle"),
-        ]
+        if self.difficulty_mult >= 1.8:
+            return [
+                (3.0 * self.difficulty_mult, angle - 0.15, 5, 5, "circle"),
+                (3.0 * self.difficulty_mult, angle + 0.15, 5, 5, "circle"),
+            ]
+        else:
+            return [(3.0 * self.difficulty_mult, angle, 5, 5, "circle")]
 
     def _draw_sprite(self):
         self.image = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
