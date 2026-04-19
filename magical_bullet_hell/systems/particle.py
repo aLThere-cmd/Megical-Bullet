@@ -7,6 +7,35 @@ import random
 from utils.math_helpers import lerp, lerp_color
 
 
+# Cache for particle surfaces to avoid creating them every frame
+_particle_cache = {}
+
+
+def get_particle_surface(color, size, alpha):
+    """Get a pre-rendered particle surface from cache or create one."""
+    # Quantize alpha and size to keep cache size manageable
+    q_alpha = int(alpha / 16) * 16
+    q_size = round(size, 1)
+    
+    if q_alpha <= 0 or q_size < 1:
+        return None
+        
+    key = (tuple(color[:3]), q_size, q_alpha)
+    if key in _particle_cache:
+        return _particle_cache[key]
+        
+    r = int(max(1, q_size * 3))
+    s = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+
+    # Glow
+    pygame.draw.circle(s, (*color[:3], min(255, q_alpha // 3)), (r, r), r)
+    # Core
+    pygame.draw.circle(s, (*color[:3], min(255, q_alpha)), (r, r), int(q_size))
+    
+    _particle_cache[key] = s
+    return s
+
+
 class Particle:
     """A single particle."""
 
@@ -54,23 +83,16 @@ class Particle:
     def draw(self, surface, offset_x=0, offset_y=0):
         if not self.alive:
             return
-        size = int(self.current_size)
-        if size < 1:
-            return
-
+            
         alpha = self.alpha
         if alpha <= 0:
             return
 
-        r = max(1, size * 3)
-        s = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-
-        # Glow
-        pygame.draw.circle(s, (*self.color[:3], min(255, alpha // 3)), (r, r), r)
-        # Core
-        pygame.draw.circle(s, (*self.color[:3], min(255, alpha)), (r, r), size)
-
-        surface.blit(s, (int(self.x) - r + offset_x, int(self.y) - r + offset_y), special_flags=pygame.BLEND_ADD)
+        s = get_particle_surface(self.color, self.current_size, alpha)
+        if s:
+            r = s.get_width() // 2
+            surface.blit(s, (int(self.x) - r + offset_x, int(self.y) - r + offset_y), 
+                         special_flags=pygame.BLEND_ADD)
 
 
 class TextParticle(Particle):
@@ -79,16 +101,21 @@ class TextParticle(Particle):
         super().__init__(x, y, vx, vy, color, lifetime, size, fade=True, shrink=False)
         self.text = text
         self.font = font
+        self.surf = None
+        self._pre_render()
         
+    def _pre_render(self):
+        """Pre-render text to avoid doing it every frame."""
+        self.surf = self.font.render(self.text, True, self.color)
+
     def draw(self, surface, offset_x=0, offset_y=0):
-        if not self.alive: return
+        if not self.alive or not self.surf: return
         alpha = self.alpha
         if alpha <= 0: return
         
-        text_surf = self.font.render(self.text, True, self.color)
-        text_surf.set_alpha(alpha)
-        surface.blit(text_surf, (int(self.x) - text_surf.get_width()//2 + offset_x, 
-                                 int(self.y) - text_surf.get_height()//2 + offset_y))
+        self.surf.set_alpha(alpha)
+        surface.blit(self.surf, (int(self.x) - self.surf.get_width()//2 + offset_x, 
+                                 int(self.y) - self.surf.get_height()//2 + offset_y))
 
 class ParticleSystem:
     """Manages all particles in the game."""

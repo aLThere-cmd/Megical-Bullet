@@ -41,7 +41,7 @@ class Player(pygame.sprite.Sprite):
         # State
         self.lives = PLAYER_START_LIVES
         self.bombs = 3 if self.character_id == "magical_girl" else 1
-        self.power = 4.0  # Powerups removed, start at max power
+        self.power = PLAYER_START_POWER
         self.score = 0
         self.graze_count = 0
         self.focused = False
@@ -52,7 +52,8 @@ class Player(pygame.sprite.Sprite):
         self.dead = False
         self.death_timer = 0
         self.anim_timer = 0
-        self.base_damage_mult = 0.20 if self.character_id == "magical_girl" else 1.0
+        self.death_window = 0 # Frames to bomb after being hit
+        self.base_damage_mult = 0.40 if self.character_id == "magical_girl" else 1.0 # Increased from 0.20
         self.damage_multiplier = self.base_damage_mult
         
         # Apply passives
@@ -105,13 +106,25 @@ class Player(pygame.sprite.Sprite):
 
         # Bomb
         if keys[KEY_BOMB]:
+            if self.death_window > 0:
+                # SUCCESSFUL DEATHBOMB!
+                self.death_window = 0
+                self.invincible_timer = 30 # Small extra invincibility
+                return self.use_bomb(is_deathbomb=True)
             return self.use_bomb()
         return False
 
-    def use_bomb(self):
+    def use_bomb(self, is_deathbomb=False):
         """Activate spell card (bomb)."""
-        if self.bombs > 0 and self.bomb_timer <= 0:
-            self.bombs -= 1
+        # Deathbomb costs 2 bombs if possible, or just 1 if that's all you have
+        cost = 1
+        if is_deathbomb:
+            # Touhou penalty: deathbombing might cost more in some games, 
+            # but here we'll just let it work if they have at least 1.
+            pass
+
+        if self.bombs >= cost and self.bomb_timer <= 0:
+            self.bombs -= cost
             if self.character_id == "magical_girl":
                 self.bomb_timer = PLAYER_BOMB_DURATION
                 # Gradual clear handled in game.py _process_bomb for better visual
@@ -127,22 +140,33 @@ class Player(pygame.sprite.Sprite):
         return False
 
     def die(self):
-        """Player death. Auto-bomb if possible."""
-        if self.invincible_timer > 0:
+        """Player hit. Enter deathbomb window."""
+        if self.invincible_timer > 0 or self.death_window > 0:
             return False
             
         # AUTO-BOMB (Muscular Man only)
         if self.character_id == "muscular_man" and self.bombs > 0 and not self.is_bombing:
             if self.use_bomb():
-                # Flash or effect for auto-bomb
                 self.invincible_timer = max(self.invincible_timer, 60)
                 return False
 
+        # If they have bombs, give a window to deathbomb
+        if self.bombs > 0:
+            self.death_window = 12 # 0.2 seconds to react
+            return False
+
+        # No bombs left, die instantly
+        return self._actually_die()
+
+    def _actually_die(self):
+        """Perform the actual death logic."""
         self.lives -= 1
         self.dead = True
         self.death_timer = 60
-        # self.power = max(1.0, self.power - 0.5) # Removed power loss
-        return True
+        
+        power_loss = self.power * 0.3
+        self.power -= power_loss
+        return power_loss
 
     def respawn(self):
         """Respawn player after death."""
@@ -184,38 +208,48 @@ class Player(pygame.sprite.Sprite):
         damage = (PLAYER_BULLET_DAMAGE * self.damage_multiplier) if self.character_id != "muscular_man" else 0
         stat_effect = "burn" if self.character_id == "muscular_man" else None
 
-        # Central shot always
+        # Central shot always (increased to 3 streams at center)
         self.bullet_group.add(
             PlayerBullet(self.x, self.y - 10, 0, -speed, damage, movement_type=move_type, status_effect=stat_effect)
         )
+        self.bullet_group.add(
+            PlayerBullet(self.x - 4, self.y - 8, -0.2, -speed, damage * 0.9, movement_type=move_type, status_effect=stat_effect)
+        )
+        self.bullet_group.add(
+            PlayerBullet(self.x + 4, self.y - 8, 0.2, -speed, damage * 0.9, movement_type=move_type, status_effect=stat_effect)
+        )
 
         if power_level >= 2:
-            # Add side shots
-            spread = 0.15
-            self.bullet_group.add(
-                PlayerBullet(self.x - 8, self.y - 5,
-                             math.sin(-spread) * speed * 0.3, -speed, damage * 0.7, movement_type=move_type, status_effect=stat_effect)
-            )
-            self.bullet_group.add(
-                PlayerBullet(self.x + 8, self.y - 5,
-                             math.sin(spread) * speed * 0.3, -speed, damage * 0.7, movement_type=move_type, status_effect=stat_effect)
-            )
+            # Add more side shots
+            spreads = [0.15, 0.35]
+            for s in spreads:
+                self.bullet_group.add(
+                    PlayerBullet(self.x - 10, self.y - 5,
+                                 math.sin(-s) * speed * 0.4, -speed, damage * 0.8, movement_type=move_type, status_effect=stat_effect)
+                )
+                self.bullet_group.add(
+                    PlayerBullet(self.x + 10, self.y - 5,
+                                 math.sin(s) * speed * 0.4, -speed, damage * 0.8, movement_type=move_type, status_effect=stat_effect)
+                )
 
         if power_level >= 3:
-            spread2 = 0.25
-            self.bullet_group.add(
-                PlayerBullet(self.x - 16, self.y,
-                             math.sin(-spread2) * speed * 0.5, -speed, damage * 0.5, movement_type=move_type, status_effect=stat_effect)
-            )
-            self.bullet_group.add(
-                PlayerBullet(self.x + 16, self.y,
-                             math.sin(spread2) * speed * 0.5, -speed, damage * 0.5, movement_type=move_type, status_effect=stat_effect)
-            )
+            spreads2 = [0.5, 0.7]
+            for s in spreads2:
+                self.bullet_group.add(
+                    PlayerBullet(self.x - 18, self.y,
+                                 math.sin(-s) * speed * 0.6, -speed, damage * 0.6, movement_type=move_type, status_effect=stat_effect)
+                )
+                self.bullet_group.add(
+                    PlayerBullet(self.x + 18, self.y,
+                                 math.sin(s) * speed * 0.6, -speed, damage * 0.6, movement_type=move_type, status_effect=stat_effect)
+                )
 
         if power_level >= 4:
-            self.bullet_group.add(
-                PlayerBullet(self.x, self.y - 10, 0, -speed * 1.2, damage * 1.2, movement_type=move_type, status_effect=stat_effect)
-            )
+            # Extra concentrated forward power
+            for i in range(2):
+                self.bullet_group.add(
+                    PlayerBullet(self.x + (i*8 - 4), self.y - 15, 0, -speed * 1.3, damage * 1.5, movement_type=move_type, status_effect=stat_effect)
+                )
 
     def _shoot_focused(self, power_level):
         """Focused concentrated shot pattern."""
@@ -223,33 +257,29 @@ class Player(pygame.sprite.Sprite):
         damage = PLAYER_FOCUS_BULLET_DAMAGE * self.damage_multiplier
 
         if self.character_id == "magical_girl":
-            # Laser beams
-            self.bullet_group.add(
-                PlayerBullet(self.x - 3, self.y - 10, 0, -speed, damage * 1.1, focused=True, width_mult=0.4)
-            )
-            self.bullet_group.add(
-                PlayerBullet(self.x + 3, self.y - 10, 0, -speed, damage * 1.1, focused=True, width_mult=0.4)
-            )
+            # Concentrated laser beams (increased streams)
+            for i in range(3):
+                offset = (i - 1) * 5
+                self.bullet_group.add(
+                    PlayerBullet(self.x + offset, self.y - 12, 0, -speed, damage * 1.2, focused=True, width_mult=0.45)
+                )
 
             if power_level >= 2:
-                self.bullet_group.add(
-                    PlayerBullet(self.x - 7, self.y - 5, 0, -speed * 0.95, damage * 1.2, focused=True, width_mult=0.4)
-                )
-                self.bullet_group.add(
-                    PlayerBullet(self.x + 7, self.y - 5, 0, -speed * 0.95, damage * 1.2, focused=True, width_mult=0.4)
-                )
+                for side in [-1, 1]:
+                    self.bullet_group.add(
+                        PlayerBullet(self.x + side * 10, self.y - 8, 0, -speed * 1.05, damage * 1.3, focused=True, width_mult=0.4)
+                    )
 
             if power_level >= 3:
-                self.bullet_group.add(
-                    PlayerBullet(self.x - 12, self.y, 0, -speed * 0.9, damage * 1.0, focused=True, width_mult=0.4)
-                )
-                self.bullet_group.add(
-                    PlayerBullet(self.x + 12, self.y, 0, -speed * 0.9, damage * 1.0, focused=True, width_mult=0.4)
-                )
+                for side in [-1, 1]:
+                    self.bullet_group.add(
+                        PlayerBullet(self.x + side * 15, self.y - 4, 0, -speed * 1.1, damage * 1.4, focused=True, width_mult=0.35)
+                    )
 
             if power_level >= 4:
+                # Heavy core beam
                 self.bullet_group.add(
-                    PlayerBullet(self.x, self.y - 15, 0, -speed * 1.1, damage * 2.0, focused=True, width_mult=0.5)
+                    PlayerBullet(self.x, self.y - 20, 0, -speed * 1.2, damage * 3.0, focused=True, width_mult=0.6)
                 )
         elif self.character_id == "muscular_man":
             # Fire breath (flamethrower) - 0 damage, applies blue_flame
@@ -275,12 +305,23 @@ class Player(pygame.sprite.Sprite):
         # Timers
         if self.shoot_timer > 0:
             self.shoot_timer -= 1
-        if self.invincible_timer > 0:
-            self.invincible_timer -= 1
+        if self.death_window > 0:
+            self.death_window -= 1
+            if self.death_window == 0:
+                # Window closed, you die
+                from core.game import game_instance # We'll need a reference to trigger the death effects
+                if game_instance:
+                    game_instance.trigger_death()
+                else:
+                    self._actually_die()
+
         if self.bomb_timer > 0:
             self.bomb_timer -= 1
             if self.bomb_timer == 0:
-                self.damage_multiplier = self.base_damage_mult # Reset damage multiplier when bomb ends
+                self.damage_multiplier = self.base_damage_mult
+
+        if self.invincible_timer > 0:
+            self.invincible_timer -= 1
 
         self.shoot()
         self.rect.center = (int(self.x), int(self.y))
@@ -383,8 +424,8 @@ class Player(pygame.sprite.Sprite):
                                    (int(mx), int(my)), 2)
 
     def add_power(self, amount):
-        """Powerups are removed, this does nothing."""
-        pass
+        """Add power and clamp to max."""
+        self.power = min(PLAYER_MAX_POWER, self.power + amount)
 
     def add_score(self, amount):
         """Add score."""

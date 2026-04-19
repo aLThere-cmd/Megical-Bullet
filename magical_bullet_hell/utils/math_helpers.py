@@ -17,6 +17,13 @@ def distance(x1, y1, x2, y2):
     return math.sqrt(dx * dx + dy * dy)
 
 
+def distance_sq(x1, y1, x2, y2):
+    """Calculate squared distance between two points (faster than distance)."""
+    dx = x2 - x1
+    dy = y2 - y1
+    return dx * dx + dy * dy
+
+
 def normalize(vx, vy):
     """Normalize a 2D vector."""
     mag = math.sqrt(vx * vx + vy * vy)

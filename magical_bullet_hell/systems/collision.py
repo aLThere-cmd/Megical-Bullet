@@ -6,7 +6,7 @@ from config.settings import (
     PLAYER_HITBOX_RADIUS, PLAYER_GRAZE_RADIUS, PLAYER_COLLECT_RADIUS,
     GRAZE_SCORE, GRAZE_POWER,
 )
-from utils.math_helpers import distance
+from utils.math_helpers import distance, distance_sq
 
 
 def check_player_enemy_bullet_collision(player, enemy_bullets, particles):
@@ -21,10 +21,11 @@ def check_player_enemy_bullet_collision(player, enemy_bullets, particles):
     hit = False
 
     for bullet in enemy_bullets:
-        dist = distance(px, py, bullet.x, bullet.y)
+        d_sq = distance_sq(px, py, bullet.x, bullet.y)
+        threshold = (PLAYER_HITBOX_RADIUS + bullet.radius * 0.3) ** 2
 
         # Hitbox collision (tiny radius)
-        if dist < PLAYER_HITBOX_RADIUS + bullet.radius * 0.3:
+        if d_sq < threshold:
             hit = True
             bullet.kill()
             break
@@ -47,9 +48,9 @@ def check_graze(player, enemy_bullets):
         if bullet.grazed:
             continue
 
-        dist = distance(px, py, bullet.x, bullet.y)
+        d_sq = distance_sq(px, py, bullet.x, bullet.y)
 
-        if dist < PLAYER_GRAZE_RADIUS:
+        if d_sq < PLAYER_GRAZE_RADIUS ** 2:
             bullet.grazed = True
             grazed_bullets.append(bullet)
 
@@ -65,8 +66,9 @@ def check_player_bullet_enemy_collision(player_bullets, enemies, particles):
 
     for bullet in list(player_bullets):
         for enemy in enemies:
-            dist = distance(bullet.x, bullet.y, enemy.x, enemy.y)
-            if dist < enemy.radius + bullet.radius:
+            d_sq = distance_sq(bullet.x, bullet.y, enemy.x, enemy.y)
+            threshold = (enemy.radius + bullet.radius) ** 2
+            if d_sq < threshold:
                 killed = enemy.take_damage(bullet.damage)
                 
                 if hasattr(bullet, 'status_effect') and bullet.status_effect:
@@ -101,13 +103,15 @@ def check_item_collection(player, items):
     collected = []
 
     for item in items:
-        dist = distance(px, py, item.x, item.y)
-        if dist < PLAYER_COLLECT_RADIUS + item.radius:
+        d_sq = distance_sq(px, py, item.x, item.y)
+        threshold = (PLAYER_COLLECT_RADIUS + item.radius) ** 2
+        
+        if d_sq < threshold:
             collected.append(item)
         elif item.attracted:
             # Already being attracted
-            collected_check = dist < PLAYER_COLLECT_RADIUS + item.radius + 10
-            if collected_check:
+            threshold_attract = (PLAYER_COLLECT_RADIUS + item.radius + 10) ** 2
+            if d_sq < threshold_attract:
                 collected.append(item)
 
     return collected

@@ -9,6 +9,7 @@ from config.settings import (
     BULLET_COLORS
 )
 from utils.renderer import draw_glow_bullet, draw_diamond
+from utils.math_helpers import distance_sq
 
 
 class PlayerBullet(pygame.sprite.Sprite):
@@ -66,14 +67,12 @@ class PlayerBullet(pygame.sprite.Sprite):
         # Homing behavior
         if (self.movement_type == "homing" or self.movement_type == "homing_sine") and enemies and self.time_alive > 5:
             nearest_enemy = None
-            min_dist = 80 # Very narrow homing range
+            min_dist_sq = 6400 # 80^2
             for enemy in enemies:
-                # Calculate distance
-                dx = enemy.x - self.x
-                dy = enemy.y - self.y
-                dist = math.sqrt(dx * dx + dy * dy)
-                if dist < min_dist:
-                    min_dist = dist
+                # Calculate squared distance
+                d_sq = distance_sq(self.x, self.y, enemy.x, enemy.y)
+                if d_sq < min_dist_sq:
+                    min_dist_sq = d_sq
                     nearest_enemy = enemy
             
             if nearest_enemy:

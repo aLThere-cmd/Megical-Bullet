@@ -9,6 +9,7 @@ from config.settings import (
     WINDOW_WIDTH, WINDOW_HEIGHT,
     COLOR_TEXT, COLOR_TEXT_HIGHLIGHT,
 )
+from utils.renderer import draw_star
 
 
 class ScreenEffects:
@@ -45,6 +46,12 @@ class ScreenEffects:
         # Background dim for boss spells
         self.dim_alpha = 0
         self.dim_target = 0
+        
+        # Pre-created surfaces for performance
+        self.dim_surf = pygame.Surface((PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT), pygame.SRCALPHA)
+        self.flash_surf = pygame.Surface((PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT), pygame.SRCALPHA)
+        self.banner_surf = None
+        self.banner_side = None
 
     def start_shake(self, intensity=5, duration=10):
         """Start screen shake effect."""
@@ -73,10 +80,11 @@ class ScreenEffects:
     def start_cutin(self, character_id, spell_name):
         """Start spell card cut-in effect."""
         self.cutin_active = True
-        self.cutin_duration = 90
+        self.cutin_duration = 60 # Reduced from 90 to reduce lag
         self.cutin_timer = self.cutin_duration
         self.cutin_text = spell_name
         self.cutin_side = "left" if character_id == "magical_girl" else "right"
+        self._pre_render_banner()
         self.start_shake(4, 15)
         self.set_dim(180) # Deeper dim during cut-in
 
@@ -124,9 +132,8 @@ class ScreenEffects:
         """Draw all active effects."""
         # Background dim
         if self.dim_alpha > 0:
-            dim_surf = pygame.Surface((PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT), pygame.SRCALPHA)
-            dim_surf.fill((0, 0, 20, int(self.dim_alpha)))
-            surface.blit(dim_surf, (PLAYFIELD_X + offset_x, PLAYFIELD_Y + offset_y))
+            self.dim_surf.fill((0, 0, 20, int(self.dim_alpha)))
+            surface.blit(self.dim_surf, (PLAYFIELD_X + offset_x, PLAYFIELD_Y + offset_y))
 
         # Bomb visual
         if self.bomb_active:
@@ -134,17 +141,34 @@ class ScreenEffects:
 
         # Flash
         if self.flash_alpha > 0:
-            flash_surf = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-            flash_surf.fill((*self.flash_color[:3], min(255, self.flash_alpha)))
-            surface.blit(flash_surf, (0, 0))
+            self.flash_surf.fill((*self.flash_color[:3], min(255, self.flash_alpha)))
+            surface.blit(self.flash_surf, (PLAYFIELD_X + offset_x, PLAYFIELD_Y + offset_y))
             
         # Cut-in (Last to be on top of playfield but maybe under HUD)
         if self.cutin_active:
-            self._draw_cutin(surface)
+            self._draw_cutin(surface, offset_x, offset_y)
 
-    def _draw_cutin(self, surface):
+    def _pre_render_banner(self):
+        """Pre-render the gradient banner for spell card cut-in."""
+        banner_h = 100
+        self.banner_surf = pygame.Surface((PLAYFIELD_WIDTH, banner_h), pygame.SRCALPHA)
+        color_main = (60, 20, 100) if self.cutin_side == "left" else (100, 40, 20)
+        
+        for i in range(PLAYFIELD_WIDTH):
+            grad_t = i / PLAYFIELD_WIDTH
+            if self.cutin_side == "right": grad_t = 1.0 - grad_t
+            
+            # Non-linear gradient for more 'impact'
+            curr_alpha = int(220 * (1.0 - grad_t**1.5))
+            pygame.draw.line(self.banner_surf, (*color_main, curr_alpha), (i, 0), (i, banner_h))
+            # Top/bottom lines
+            if i % 2 == 0:
+                pygame.draw.line(self.banner_surf, (255, 255, 255, curr_alpha // 2), (i, 0), (i, 2))
+                pygame.draw.line(self.banner_surf, (255, 255, 255, curr_alpha // 2), (i, banner_h - 2), (i, banner_h))
+
+    def _draw_cutin(self, surface, offset_x, offset_y):
         """Draw the spell card cut-in portrait and banner."""
-        if not self.cutin_active:
+        if not self.cutin_active or not self.banner_surf:
             return
             
         t = 1.0 - (self.cutin_timer / self.cutin_duration)
@@ -155,7 +179,6 @@ class ScreenEffects:
         
         alpha = 255
         move_t = 1.0
-        progress = 1.0
         
         if t < slide_in_time:
             progress = t / slide_in_time
@@ -169,27 +192,12 @@ class ScreenEffects:
             move_t = 1.0
             alpha = 255
             
-        # Banner background (Double layer for depth)
+        # Banner background
         banner_h = 100
-        banner_y = WINDOW_HEIGHT // 2 - 50
+        banner_y = PLAYFIELD_Y + (PLAYFIELD_HEIGHT // 2 - 50)
         
-        # Bottom layer
-        banner_surf = pygame.Surface((WINDOW_WIDTH, banner_h), pygame.SRCALPHA)
-        color_main = (60, 20, 100) if self.cutin_side == "left" else (100, 40, 20)
-        
-        for i in range(WINDOW_WIDTH):
-            grad_t = i / WINDOW_WIDTH
-            if self.cutin_side == "right": grad_t = 1.0 - grad_t
-            
-            # Non-linear gradient for more 'impact'
-            curr_alpha = int(220 * (1.0 - grad_t**1.5) * (alpha / 255))
-            pygame.draw.line(banner_surf, (*color_main, curr_alpha), (i, 0), (i, banner_h))
-            # Top/bottom lines
-            if i % 2 == 0:
-                pygame.draw.line(banner_surf, (255, 255, 255, curr_alpha // 2), (i, 0), (i, 2))
-                pygame.draw.line(banner_surf, (255, 255, 255, curr_alpha // 2), (i, banner_h - 2), (i, banner_h))
-            
-        surface.blit(banner_surf, (0, banner_y))
+        self.banner_surf.set_alpha(alpha)
+        surface.blit(self.banner_surf, (PLAYFIELD_X + offset_x, banner_y + offset_y))
         
         # Portrait removed as requested
             
@@ -201,17 +209,18 @@ class ScreenEffects:
         name_surf = font_large.render(self.cutin_text, True, COLOR_TEXT_HIGHLIGHT)
         
         if self.cutin_side == "left":
-            tx_start = -name_surf.get_width()
-            tx_target = (WINDOW_WIDTH - name_surf.get_width()) // 2
+            tx_start = PLAYFIELD_X - name_surf.get_width()
+            tx_target = PLAYFIELD_X + (PLAYFIELD_WIDTH - name_surf.get_width()) // 2
             tx = tx_start + (tx_target - tx_start) * move_t
             if t > 0.85: tx += (t - 0.85) * 2000
         else:
-            tx_start = WINDOW_WIDTH
-            tx_target = (WINDOW_WIDTH - name_surf.get_width()) // 2
+            tx_start = PLAYFIELD_X + PLAYFIELD_WIDTH
+            tx_target = PLAYFIELD_X + (PLAYFIELD_WIDTH - name_surf.get_width()) // 2
             tx = tx_start - (tx_start - tx_target) * move_t
             if t > 0.85: tx -= (t - 0.85) * 2000
             
-        ty = banner_y + (banner_h - name_surf.get_height()) // 2 + 10
+        ty = banner_y + (banner_h - name_surf.get_height()) // 2 + 10 + offset_y
+        tx += offset_x
         
         # Text alpha fade
         label_surf.set_alpha(alpha)
@@ -236,9 +245,8 @@ class ScreenEffects:
         # Instant Full-Screen Flash Burst
         if t < 0.15:
             burst_alpha = int(100 * (1.0 - t / 0.15))
-            burst_surf = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-            burst_surf.fill((255, 255, 255, burst_alpha))
-            surface.blit(burst_surf, (0, 0))
+            self.flash_surf.fill((255, 255, 255, burst_alpha))
+            surface.blit(self.flash_surf, (PLAYFIELD_X + offset_x, PLAYFIELD_Y + offset_y))
 
         # High-speed shockwaves
         for i in range(5):
@@ -254,7 +262,6 @@ class ScreenEffects:
             pygame.draw.circle(surface, (*color, alpha), (cx, cy), radius, 3)
             
             # Star trails on ring
-            from utils.renderer import draw_star
             star_count = 8
             for s_i in range(star_count):
                 angle = t * 10 + s_i * (math.pi * 2 / star_count)

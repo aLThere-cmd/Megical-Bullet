@@ -9,6 +9,7 @@ from config.settings import (
     PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT, FPS, TITLE,
     COLOR_BG_DARK, COLOR_PLAYFIELD_BG, COLOR_PLAYFIELD_BORDER,
     ITEM_AUTOCOLLECT_Y, DIFFICULTY, GRAZE_SCORE, GRAZE_POWER,
+    ITEM_POWER_VALUE,
     KEY_PAUSE, KEY_SHOOT, KEY_BOMB, KEY_FULLSCREEN
 )
 from entities.player import Player
@@ -36,10 +37,16 @@ STATE_GAME_OVER = "game_over"
 STATE_VICTORY = "victory"
 
 
+# Global reference for easier access from entities
+game_instance = None
+
+
 class Game:
     """Main game class managing the game loop and state."""
 
     def __init__(self):
+        global game_instance
+        game_instance = self
         pygame.mixer.pre_init(44100, -16, 2, 512)
         pygame.init()
         
@@ -57,15 +64,16 @@ class Game:
         self.is_fullscreen = False
 
         # Background layers
-        self.bg_stars = []
+        self.star_surf = pygame.Surface((PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT * 2))
+        self.star_surf.fill((0, 0, 0))
+        self.star_surf.set_colorkey((0, 0, 0))
         for _ in range(100):
-            self.bg_stars.append({
-                "x": random.uniform(PLAYFIELD_X, PLAYFIELD_X + PLAYFIELD_WIDTH),
-                "y": random.uniform(PLAYFIELD_Y, PLAYFIELD_Y + PLAYFIELD_HEIGHT),
-                "speed": random.uniform(0.5, 1.8),
-                "size": random.uniform(1, 2),
-                "brightness": random.uniform(150, 255),
-            })
+            sx = random.uniform(0, PLAYFIELD_WIDTH)
+            sy = random.uniform(0, PLAYFIELD_HEIGHT * 2)
+            bright = random.uniform(150, 255)
+            size = int(random.uniform(1, 2))
+            pygame.draw.circle(self.star_surf, (bright, bright, bright), (int(sx), int(sy)), size)
+        self.star_scroll = 0
             
         self.bg_nebulas = []
         for _ in range(5):
@@ -235,7 +243,7 @@ class Game:
             self.effects.start_cutin(self.player.character_id, name)
             
             # Start bomb visual here instead of in _process_bomb to avoid re-triggering
-            self.effects.start_bomb_visual(self.player.x, self.player.y, 90)
+            self.effects.start_bomb_visual(self.player.x, self.player.y, 60) # Reduced from 90
             self.effects.start_flash((255, 200, 255), 10)
 
         # Update entities
@@ -327,22 +335,10 @@ class Game:
             )
             if was_hit:
                 died = self.player.die()
-                if died:
-                    from systems.audio import audio
-                    audio.play("death")
-                    self.particles.emit_explosion(
-                        self.player.x, self.player.y, (255, 200, 255), count=25
-                    )
-                    self.effects.start_flash((255, 100, 150), 10)
-                    self.effects.start_shake(6, 15)
+                if died is not False:
+                    self.trigger_death(died)
 
-                    # Clear bullets on death
-                    for bullet in self.enemy_bullets:
-                        self.particles.emit_sparkle(bullet.x, bullet.y, (200, 200, 255))
-                    self.enemy_bullets.empty()
-
-                    if self.player.lives <= 0:
-                        self.state = STATE_GAME_OVER
+            # Item collection
 
             # Item collection
             collected = check_item_collection(self.player, self.items)
@@ -367,6 +363,45 @@ class Game:
                 self.player.x, self.player.y + 10,
                 (255, 180, 220), size=2
             )
+
+    def trigger_death(self, power_loss=None):
+        """Trigger death effects and logic (called from player)."""
+        if power_loss is None:
+            power_loss = self.player._actually_die()
+
+        from systems.audio import audio
+        audio.play("death")
+        self.particles.emit_explosion(
+            self.player.x, self.player.y, (255, 200, 255), count=25
+        )
+        self.effects.start_flash((255, 100, 150), 10)
+        self.effects.start_shake(6, 15)
+
+        # Subtract score (10% or at least a bit)
+        score_loss = int(self.player.score * 0.1)
+        self.player.score = max(0, self.player.score - score_loss)
+
+        # Drop points/power items
+        from systems.item import Item
+        power_items = int(power_loss / ITEM_POWER_VALUE) if ITEM_POWER_VALUE > 0 else 0
+        power_items = min(power_items, 15) 
+        for _ in range(power_items):
+            ox = self.player.x + random.uniform(-40, 40)
+            oy = self.player.y + random.uniform(-40, 40)
+            self.items.add(Item(ox, oy, "power"))
+        
+        for _ in range(8):
+            ox = self.player.x + random.uniform(-50, 50)
+            oy = self.player.y + random.uniform(-50, 50)
+            self.items.add(Item(ox, oy, "point"))
+
+        # Clear bullets on death
+        for bullet in self.enemy_bullets:
+            self.particles.emit_sparkle(bullet.x, bullet.y, (200, 200, 255))
+        self.enemy_bullets.empty()
+
+        if self.player.lives <= 0:
+            self.state = STATE_GAME_OVER
 
     def _handle_enemy_death(self, enemy):
         """Handle score, particles, drops, and state when enemy dies."""
@@ -475,11 +510,11 @@ class Game:
         # Particles
         self.particles.draw(self.screen, ox, oy)
 
+        # Effects (Dim, Bomb, and Cut-in are now playfield-relative and clipped)
+        self.effects.draw(self.screen, ox, oy)
+
         # Reset clipping rect
         self.screen.set_clip(None)
-
-        # Effects (Flash and Cut-in are full-screen, Dim and Bomb are playfield-relative)
-        self.effects.draw(self.screen, ox, oy)
 
         # Playfield border
         border_rect = pygame.Rect(PLAYFIELD_X + ox - 2, PLAYFIELD_Y + oy - 2,
@@ -499,10 +534,15 @@ class Game:
 
     def _draw_playfield_bg(self, ox, oy):
         """Draw playfield background with multiple layers."""
+        # Draw playfield background
         # Dark background
         bg_rect = pygame.Rect(PLAYFIELD_X + ox, PLAYFIELD_Y + oy,
                                PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT)
         pygame.draw.rect(self.screen, COLOR_PLAYFIELD_BG, bg_rect)
+
+        # Magic Circle Background during Boss Spell Card
+        if self.spawner.boss_active and self.spawner.boss and self.spawner.boss.is_spell_card:
+            self._draw_magic_circle(self.spawner.boss.x + ox, self.spawner.boss.y + oy)
 
         # Nebulas / Clouds layer
         for nebula in self.bg_nebulas:
@@ -515,21 +555,31 @@ class Game:
                              (nebula["x"] + ox - nebula["size"], nebula["y"] + oy - nebula["size"]), 
                              special_flags=pygame.BLEND_ADD)
 
-        # Scrolling stars
-        for star in self.bg_stars:
-            star["y"] += star["speed"]
-            if star["y"] > PLAYFIELD_Y + PLAYFIELD_HEIGHT:
-                star["y"] = PLAYFIELD_Y
-                star["x"] = random.uniform(PLAYFIELD_X, PLAYFIELD_X + PLAYFIELD_WIDTH)
+        # Scrolling stars (Optimized)
+        self.star_scroll = (self.star_scroll + 1.2) % PLAYFIELD_HEIGHT
+        # Draw two copies for seamless loop
+        self.screen.blit(self.star_surf, (PLAYFIELD_X + ox, PLAYFIELD_Y + oy + self.star_scroll - PLAYFIELD_HEIGHT))
+        self.screen.blit(self.star_surf, (PLAYFIELD_X + ox, PLAYFIELD_Y + oy + self.star_scroll))
 
-            sx = star["x"] + ox
-            sy = star["y"] + oy
-
-            # Only draw if in playfield
-            if (PLAYFIELD_X <= sx <= PLAYFIELD_X + PLAYFIELD_WIDTH and
-                PLAYFIELD_Y <= sy <= PLAYFIELD_Y + PLAYFIELD_HEIGHT):
-                bright = star["brightness"]
-                twinkle = 0.5 + 0.5 * math.sin(self.frame_count * 0.05 + star["x"])
-                alpha = int(bright * twinkle)
-                size = int(star["size"])
-                pygame.draw.circle(self.screen, (alpha, alpha, alpha), (int(sx), int(sy)), size)
+    def _draw_magic_circle(self, cx, cy):
+        """Draw a large rotating magical circle behind the boss."""
+        radius = 180
+        color = (180, 100, 255, 60)
+        
+        # Rotating outer ring
+        angle_step = math.pi / 6
+        for i in range(12):
+            angle = self.frame_count * 0.02 + i * angle_step
+            px = cx + math.cos(angle) * radius
+            py = cy + math.sin(angle) * radius
+            pygame.draw.circle(self.screen, color, (int(px), int(py)), 3)
+        
+        # Hexagon/Star pattern
+        pts = []
+        for i in range(6):
+            angle = -self.frame_count * 0.01 + i * (math.pi / 3)
+            pts.append((cx + math.cos(angle) * radius, cy + math.sin(angle) * radius))
+        pygame.draw.polygon(self.screen, (100, 50, 150, 40), pts, 1)
+        
+        # Inner circle
+        pygame.draw.circle(self.screen, color, (int(cx), int(cy)), radius // 2, 1)
