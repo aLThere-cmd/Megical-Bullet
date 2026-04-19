@@ -175,6 +175,7 @@ class Player(pygame.sprite.Sprite):
 
     def _shoot_spread(self, power_level):
         """Unfocused spread shot pattern."""
+        speed = PLAYER_BULLET_SPEED
         move_type = "homing_sine" if self.character_id == "magical_girl" else "linear"
         # Muscular man does 0 impact damage, only applies status effect
         damage = (PLAYER_BULLET_DAMAGE * self.damage_multiplier) if self.character_id != "muscular_man" else 0
