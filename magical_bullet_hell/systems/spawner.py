@@ -15,15 +15,20 @@ from entities.boss_water import WaterBoss
 class Spawner:
     """Manages enemy wave spawning and difficulty scaling."""
 
-    def __init__(self, enemy_group, difficulty_settings):
+    def __init__(self, enemy_group, difficulty_settings, difficulty_name="Normal"):
         self.enemy_group = enemy_group
         self.difficulty_settings = difficulty_settings
+        self.difficulty_name = difficulty_name
 
         self.wave_timer = 120  # Initial delay before first wave
         self.wave_count = 0
         self.difficulty_mult = difficulty_settings["hp_mult"]
         self.speed_mult = difficulty_settings["speed_mult"]
         self.density_mult = difficulty_settings["density_mult"]
+        
+        # Scaling boss trigger wave
+        diff_scale = {"Easy": 0.7, "Normal": 1.0, "Hard": 1.25, "Chaotic": 1.6}.get(difficulty_name, 1.0)
+        self.boss_trigger = int(BOSS_TRIGGER_WAVE * diff_scale)
 
         self.boss = None
         self.boss_active = False
@@ -44,14 +49,16 @@ class Spawner:
 
         self.wave_timer -= 1
         if self.wave_timer <= 0:
-            self.wave_count += 1
+            # Calculate trigger for current stage
+            # Subsequent stages are 25% longer
+            current_trigger = int(self.boss_trigger * (1.0 + (self.current_stage - 1) * 0.25))
 
-            if self.wave_count >= BOSS_TRIGGER_WAVE:
+            if self.wave_count >= current_trigger:
                 # Spawn boss for current stage
                 return self._spawn_boss()
             else:
                 self._spawn_wave()
-                self.wave_timer = max(60, int(WAVE_INTERVAL - self.wave_count * 3))
+                self.wave_timer = max(60, int(WAVE_INTERVAL - self.wave_count * 2))
 
         return None
 

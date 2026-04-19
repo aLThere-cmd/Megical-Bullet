@@ -112,44 +112,38 @@ class ScreenEffects:
             surface.blit(flash_surf, (0, 0))
 
     def _draw_bomb(self, surface, offset_x=0, offset_y=0):
-        """Draw bomb/spell card visual effect."""
+        """Draw bomb/spell card visual effect with stars and shockwaves."""
         t = 1.0 - (self.bomb_timer / max(1, self.bomb_max_timer))
-        max_radius = max(PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT) * 0.8
+        max_radius = max(PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT) * 1.2
+        cx, cy = int(self.bomb_x) + offset_x, int(self.bomb_y) + offset_y
 
         # Expanding rings
-        for i in range(3):
-            ring_t = max(0, t - i * 0.1)
+        for i in range(4):
+            ring_t = max(0, t - i * 0.15)
+            if ring_t <= 0 or ring_t >= 1.0: continue
+            
             radius = int(ring_t * max_radius)
-            if radius <= 0:
-                continue
+            alpha = int(200 * (1.0 - ring_t))
+            
+            # Draw shockwave circle
+            color = [(255, 100, 255), (100, 200, 255), (255, 255, 255)][i % 3]
+            pygame.draw.circle(surface, (*color, alpha), (cx, cy), radius, 2)
+            
+            # Draw rotating star shapes
+            from utils.renderer import draw_star
+            star_radius = int(radius * 0.3)
+            star_color = (*color, int(alpha * 0.5))
+            if star_radius > 5:
+                for angle_off in range(5):
+                    ang = self.bomb_timer * 0.05 + angle_off * (math.pi * 2 / 5)
+                    sx = cx + math.cos(ang) * radius
+                    sy = cy + math.sin(ang) * radius
+                    draw_star(surface, star_color, (int(sx), int(sy)), star_radius, star_radius//2, 5, ang * 2)
 
-            alpha = int(150 * (1.0 - ring_t))
-            if alpha <= 0:
-                continue
-
-            ring_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-            colors = [
-                (255, 200, 255, alpha),
-                (200, 150, 255, alpha),
-                (255, 220, 200, alpha),
-            ]
-            pygame.draw.circle(ring_surf, colors[i % len(colors)],
-                               (radius, radius), radius, max(1, 3 - i))
-
-            surface.blit(ring_surf,
-                         (int(self.bomb_x - radius) + offset_x, int(self.bomb_y - radius) + offset_y),
-                         special_flags=pygame.BLEND_ADD)
-
-        # Center glow
-        if t < 0.5:
-            glow_alpha = int(200 * (1.0 - t * 2))
-            glow_r = int(40 + t * 80)
-            glow_surf = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
-            pygame.draw.circle(glow_surf, (255, 255, 255, glow_alpha),
-                               (glow_r, glow_r), glow_r)
-            surface.blit(glow_surf,
-                         (int(self.bomb_x - glow_r) + offset_x, int(self.bomb_y - glow_r) + offset_y),
-                         special_flags=pygame.BLEND_ADD)
+        # Center flash
+        if t < 0.3:
+            glow_alpha = int(255 * (1.0 - t / 0.3))
+            pygame.draw.circle(surface, (255, 255, 255, glow_alpha), (cx, cy), int(50 + t * 200))
 
     @property
     def offset(self):

@@ -73,11 +73,32 @@ class Particle:
         surface.blit(s, (int(self.x) - r + offset_x, int(self.y) - r + offset_y), special_flags=pygame.BLEND_ADD)
 
 
+class TextParticle(Particle):
+    """A particle that displays text."""
+    def __init__(self, x, y, vx, vy, text, color, lifetime, font, size=20):
+        super().__init__(x, y, vx, vy, color, lifetime, size, fade=True, shrink=False)
+        self.text = text
+        self.font = font
+        
+    def draw(self, surface, offset_x=0, offset_y=0):
+        if not self.alive: return
+        alpha = self.alpha
+        if alpha <= 0: return
+        
+        text_surf = self.font.render(self.text, True, self.color)
+        text_surf.set_alpha(alpha)
+        surface.blit(text_surf, (int(self.x) - text_surf.get_width()//2 + offset_x, 
+                                 int(self.y) - text_surf.get_height()//2 + offset_y))
+
 class ParticleSystem:
     """Manages all particles in the game."""
-
     def __init__(self):
         self.particles = []
+        self.font = None
+
+    def init_fonts(self):
+        if not self.font:
+            self.font = pygame.font.Font(None, 24)
 
     def update(self):
         self.particles = [p for p in self.particles if p.alive]
@@ -99,50 +120,51 @@ class ParticleSystem:
     # Effect Generators
     # =========================================================================
 
-    def emit_explosion(self, x, y, color, count=15, speed=3.0, lifetime=25):
-        """Explosion effect when enemy dies."""
+    def emit_text(self, x, y, text, color=(255, 255, 255)):
+        """Emit a rising text particle."""
+        self.init_fonts()
+        self.particles.append(
+            TextParticle(x, y, 0, -1.5, text, color, 40, self.font)
+        )
+
+    def emit_explosion(self, x, y, color, count=25, speed=4.0, lifetime=35):
+        """Enhanced explosion effect."""
         for _ in range(count):
             angle = random.uniform(0, 2 * math.pi)
             spd = random.uniform(0.5, speed)
             vx = math.cos(angle) * spd
             vy = math.sin(angle) * spd
-            size = random.uniform(2, 5)
-            lt = int(lifetime * random.uniform(0.5, 1.0))
-            # Vary color slightly
-            r = max(0, min(255, color[0] + random.randint(-30, 30)))
-            g = max(0, min(255, color[1] + random.randint(-30, 30)))
-            b = max(0, min(255, color[2] + random.randint(-30, 30)))
+            size = random.uniform(2, 6)
+            lt = int(lifetime * random.uniform(0.6, 1.2))
+            r = max(0, min(255, color[0] + random.randint(-40, 40)))
+            g = max(0, min(255, color[1] + random.randint(-40, 40)))
+            b = max(0, min(255, color[2] + random.randint(-40, 40)))
             self.particles.append(
-                Particle(x, y, vx, vy, (r, g, b), lt, size, gravity=0.02)
+                Particle(x, y, vx, vy, (r, g, b), lt, size, gravity=0.03)
             )
 
-    def emit_sparkle(self, x, y, color=(255, 255, 200), count=5):
-        """Small sparkle effect."""
+    def emit_sparkle(self, x, y, color=(255, 255, 200), count=8):
+        """Improved sparkle effect."""
         for _ in range(count):
             angle = random.uniform(0, 2 * math.pi)
-            spd = random.uniform(0.3, 1.5)
+            spd = random.uniform(0.5, 2.5)
             vx = math.cos(angle) * spd
             vy = math.sin(angle) * spd
-            lt = random.randint(10, 25)
+            lt = random.randint(15, 35)
             self.particles.append(
-                Particle(x, y, vx, vy, color, lt, random.uniform(1, 3))
+                Particle(x, y, vx, vy, color, lt, random.uniform(1, 4))
             )
 
     def emit_graze(self, x, y):
-        """Graze spark effect."""
-        for _ in range(3):
+        """Juicier graze spark effect."""
+        for _ in range(5):
             angle = random.uniform(0, 2 * math.pi)
-            spd = random.uniform(1, 3)
+            spd = random.uniform(2, 5)
             vx = math.cos(angle) * spd
             vy = math.sin(angle) * spd
-            color = random.choice([
-                (255, 255, 255),
-                (200, 220, 255),
-                (255, 200, 255),
-            ])
-            self.particles.append(
-                Particle(x, y, vx, vy, color, 12, 2)
-            )
+            color = random.choice([(255, 255, 255), (100, 200, 255), (255, 150, 255)])
+            self.particles.append(Particle(x, y, vx, vy, color, 15, 3))
+        self.emit_text(x, y - 20, "GRAZE!", (200, 255, 255))
 
     def emit_trail(self, x, y, color, size=2):
         """Single trail particle behind moving objects."""

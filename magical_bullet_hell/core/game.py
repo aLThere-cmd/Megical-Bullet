@@ -8,7 +8,7 @@ from config.settings import (
     WINDOW_WIDTH, WINDOW_HEIGHT, PLAYFIELD_X, PLAYFIELD_Y,
     PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT, FPS, TITLE,
     COLOR_BG_DARK, COLOR_PLAYFIELD_BG, COLOR_PLAYFIELD_BORDER,
-    ITEM_AUTOCOLLECT_Y, DIFFICULTY,
+    ITEM_AUTOCOLLECT_Y, DIFFICULTY, GRAZE_SCORE, GRAZE_POWER,
     KEY_PAUSE, KEY_SHOOT, KEY_BOMB, KEY_FULLSCREEN
 )
 from entities.player import Player
@@ -56,15 +56,31 @@ class Game:
         self.frame_count = 0
         self.is_fullscreen = False
 
-        # Background stars
+        # Background layers
         self.bg_stars = []
-        for _ in range(60):
+        for _ in range(100):
             self.bg_stars.append({
                 "x": random.uniform(PLAYFIELD_X, PLAYFIELD_X + PLAYFIELD_WIDTH),
                 "y": random.uniform(PLAYFIELD_Y, PLAYFIELD_Y + PLAYFIELD_HEIGHT),
-                "speed": random.uniform(0.3, 1.2),
-                "size": random.uniform(0.5, 2),
-                "brightness": random.uniform(60, 200),
+                "speed": random.uniform(0.5, 1.8),
+                "size": random.uniform(1, 2),
+                "brightness": random.uniform(150, 255),
+            })
+            
+        self.bg_nebulas = []
+        for _ in range(5):
+            size = random.uniform(100, 250)
+            color = (random.randint(20, 50), random.randint(10, 30), random.randint(40, 70), 40)
+            # Pre-render nebula
+            surf = pygame.Surface((int(size * 2), int(size * 2)), pygame.SRCALPHA)
+            pygame.draw.circle(surf, color, (int(size), int(size)), int(size))
+            
+            self.bg_nebulas.append({
+                "x": random.uniform(PLAYFIELD_X, PLAYFIELD_X + PLAYFIELD_WIDTH),
+                "y": random.uniform(PLAYFIELD_Y, PLAYFIELD_Y + PLAYFIELD_HEIGHT),
+                "speed": random.uniform(0.1, 0.3),
+                "size": size,
+                "surface": surf
             })
 
         # UI components
@@ -103,10 +119,10 @@ class Game:
         self.frame_count = 0
 
         # Create player
-        self.player = Player(self.player_bullets, character_id=self.character_id)
+        self.player = Player(self.player_bullets, self.enemy_bullets, character_id=self.character_id)
 
         # Create spawner
-        self.spawner = Spawner(self.enemies, diff)
+        self.spawner = Spawner(self.enemies, diff, self.difficulty_name)
 
         # Start stage 1 music
         from systems.audio import audio
@@ -279,8 +295,19 @@ class Game:
             for enemy in killed_enemies:
                 self._handle_enemy_death(enemy)
 
-            # Graze detection
-            check_graze(self.player, self.enemy_bullets, self.particles)
+            # Graze handling
+            graze_events = check_graze(self.player, self.enemy_bullets)
+            if graze_events:
+                from systems.audio import audio
+                audio.play("graze")
+                for bullet in graze_events:
+                    self.player.add_graze()
+                    self.player.add_score(GRAZE_SCORE)
+                    self.player.add_power(GRAZE_POWER)
+                    # Juice: Particle and small shake on graze
+                    self.particles.emit_graze(bullet.x, bullet.y)
+                    if not self.effects.shake_timer > 0: # Small micro-shake
+                        self.effects.start_shake(1.5, 4)
 
             # Player hit detection
             was_hit = check_player_enemy_bullet_collision(
@@ -360,9 +387,12 @@ class Game:
 
     def _process_bomb(self):
         """Process bomb: clear bullets and damage enemies."""
-        # Expand clearing radius over time
-        bomb_progress = 1.0 - (self.player.bomb_timer / 90.0)
-        clear_radius = 300 * bomb_progress
+        # Expand clearing radius over time (faster for better feel)
+        bomb_duration = 90.0
+        bomb_progress = 1.0 - (self.player.bomb_timer / bomb_duration)
+        # Faster expansion: reaches max radius in 0.5s (30 frames)
+        expansion_t = min(1.0, bomb_progress * 3.0)
+        clear_radius = max(WINDOW_WIDTH, WINDOW_HEIGHT) * expansion_t
 
         # Clear enemy bullets within radius (only for magical girl)
         if self.player.character_id == "magical_girl":
@@ -371,7 +401,7 @@ class Game:
                 dy = bullet.y - self.player.y
                 dist = math.sqrt(dx * dx + dy * dy)
                 if dist < clear_radius:
-                    self.particles.emit_sparkle(bullet.x, bullet.y)
+                    self.particles.emit_sparkle(bullet.x, bullet.y, (255, 150, 255))
                     self.player.add_score(10)
                     bullet.kill()
 
@@ -400,12 +430,12 @@ class Game:
         # Apply shake offset
         ox, oy = self.effects.offset
 
-        # Draw playfield background
-        self._draw_playfield_bg(ox, oy)
-
         # Set playfield clipping rect to restrict drawing
         clip_rect = pygame.Rect(PLAYFIELD_X + ox, PLAYFIELD_Y + oy, PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT)
         self.screen.set_clip(clip_rect)
+
+        # Draw playfield background
+        self._draw_playfield_bg(ox, oy)
 
         # Draw game elements directly on screen with shake offset
         # Items
@@ -454,11 +484,22 @@ class Game:
             self.game_over_screen.draw(self.screen, self.player, victory=True)
 
     def _draw_playfield_bg(self, ox, oy):
-        """Draw playfield background with scrolling stars."""
+        """Draw playfield background with multiple layers."""
         # Dark background
         bg_rect = pygame.Rect(PLAYFIELD_X + ox, PLAYFIELD_Y + oy,
-                              PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT)
+                               PLAYFIELD_WIDTH, PLAYFIELD_HEIGHT)
         pygame.draw.rect(self.screen, COLOR_PLAYFIELD_BG, bg_rect)
+
+        # Nebulas / Clouds layer
+        for nebula in self.bg_nebulas:
+            nebula["y"] += nebula["speed"]
+            if nebula["y"] > PLAYFIELD_Y + PLAYFIELD_HEIGHT + nebula["size"]:
+                nebula["y"] = PLAYFIELD_Y - nebula["size"]
+                nebula["x"] = random.uniform(PLAYFIELD_X, PLAYFIELD_X + PLAYFIELD_WIDTH)
+            
+            self.screen.blit(nebula["surface"], 
+                             (nebula["x"] + ox - nebula["size"], nebula["y"] + oy - nebula["size"]), 
+                             special_flags=pygame.BLEND_ADD)
 
         # Scrolling stars
         for star in self.bg_stars:
@@ -474,15 +515,7 @@ class Game:
             if (PLAYFIELD_X <= sx <= PLAYFIELD_X + PLAYFIELD_WIDTH and
                 PLAYFIELD_Y <= sy <= PLAYFIELD_Y + PLAYFIELD_HEIGHT):
                 bright = star["brightness"]
-                twinkle = 0.5 + 0.5 * math.sin(self.frame_count * 0.03 + star["x"])
+                twinkle = 0.5 + 0.5 * math.sin(self.frame_count * 0.05 + star["x"])
                 alpha = int(bright * twinkle)
-                size = max(1, int(star["size"]))
-
-                if size <= 1:
-                    self.screen.set_at((int(sx), int(sy)),
-                                       (alpha, alpha, int(alpha * 0.9)))
-                else:
-                    s = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-                    pygame.draw.circle(s, (alpha, alpha, int(alpha * 0.9), alpha),
-                                       (size, size), size)
-                    self.screen.blit(s, (int(sx) - size, int(sy) - size))
+                size = int(star["size"])
+                pygame.draw.circle(self.screen, (alpha, alpha, alpha), (int(sx), int(sy)), size)

@@ -36,11 +36,18 @@ class HUD:
         """Draw the complete HUD."""
         self.init_fonts()
 
-        # Draw sidebar background
+        # Draw sidebar background (Glassmorphism effect)
         sidebar_rect = pygame.Rect(SIDEBAR_X - 10, 10,
-                                   SIDEBAR_WIDTH + 20, WINDOW_HEIGHT - 20)
-        pygame.draw.rect(surface, COLOR_BG_PANEL, sidebar_rect, border_radius=8)
-        pygame.draw.rect(surface, COLOR_PLAYFIELD_BORDER, sidebar_rect, 1, border_radius=8)
+                                    SIDEBAR_WIDTH + 20, WINDOW_HEIGHT - 20)
+        # Main panel background
+        panel_surf = pygame.Surface((sidebar_rect.width, sidebar_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(panel_surf, (*COLOR_BG_PANEL[:3], 180), (0, 0, sidebar_rect.width, sidebar_rect.height), border_radius=12)
+        # Subtle gradient highlight
+        pygame.draw.rect(panel_surf, (255, 255, 255, 30), (0, 0, sidebar_rect.width, 2), border_radius=12)
+        surface.blit(panel_surf, sidebar_rect)
+        
+        # Outer border
+        pygame.draw.rect(surface, (100, 100, 150, 100), sidebar_rect, 2, border_radius=12)
 
         x = SIDEBAR_X
         y = 30
@@ -71,27 +78,29 @@ class HUD:
                          (x, y), (x + SIDEBAR_WIDTH, y))
         y += 15
 
-        # Lives
         label = self.font_medium.render("Life", True, COLOR_TEXT)
         surface.blit(label, (x, y))
-        y += 25
-        for i in range(player.lives):
-            star_x = x + 15 + i * 22
-            star_surf = pygame.Surface((20, 20), pygame.SRCALPHA)
-            draw_star(star_surf, (255, 150, 200), (10, 10), 8, 4, 5, 0)
-            surface.blit(star_surf, (star_x, y))
         y += 28
+        for i in range(player.lives):
+            pulse = 1.0 + 0.1 * math.sin(frame_count * 0.15 + i)
+            star_x = x + 15 + i * 24
+            star_surf = pygame.Surface((24, 24), pygame.SRCALPHA)
+            # Animated heart/star
+            draw_star(star_surf, (255, 100, 180), (12, 12), int(9 * pulse), int(4 * pulse), 5, frame_count * 0.02)
+            surface.blit(star_surf, (star_x - 2, y - 2))
+        y += 30
 
-        # Bombs
         label = self.font_medium.render("Spell", True, COLOR_TEXT)
         surface.blit(label, (x, y))
-        y += 25
-        for i in range(player.bombs):
-            star_x = x + 15 + i * 22
-            star_surf = pygame.Surface((20, 20), pygame.SRCALPHA)
-            draw_star(star_surf, (150, 255, 150), (10, 10), 8, 4, 4, 0)
-            surface.blit(star_surf, (star_x, y))
         y += 28
+        for i in range(player.bombs):
+            pulse = 1.0 + 0.1 * math.cos(frame_count * 0.12 + i)
+            star_x = x + 15 + i * 24
+            star_surf = pygame.Surface((24, 24), pygame.SRCALPHA)
+            # Animated spell icon
+            draw_star(star_surf, (100, 255, 200), (12, 12), int(9 * pulse), int(4 * pulse), 4, -frame_count * 0.02)
+            surface.blit(star_surf, (star_x - 2, y - 2))
+        y += 30
 
         # Separator
         pygame.draw.line(surface, (*COLOR_PLAYFIELD_BORDER, 60),

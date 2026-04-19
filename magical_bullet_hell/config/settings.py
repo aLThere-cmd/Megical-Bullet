@@ -183,7 +183,7 @@ ITEM_BOMB_PIECE_VALUE = 1
 # Spawn / Wave Settings
 # =============================================================================
 WAVE_INTERVAL = 180          # frames between waves
-BOSS_TRIGGER_WAVE = 12       # boss appears after this many waves
+BOSS_TRIGGER_WAVE = 30       # boss appears after this many waves (Target: ~3 mins on Normal)
 DIFFICULTY_SCALE_RATE = 0.02 # difficulty increase per wave
 
 # =============================================================================

@@ -23,9 +23,10 @@ from utils.math_helpers import clamp, wave_value
 class Player(pygame.sprite.Sprite):
     """The Magical Girl (or Muscular Man) player character."""
 
-    def __init__(self, bullet_group, character_id="magical_girl"):
+    def __init__(self, bullet_group, enemy_bullet_group=None, character_id="magical_girl"):
         super().__init__()
         self.bullet_group = bullet_group
+        self.enemy_bullet_group = enemy_bullet_group
         self.character_id = character_id
 
         # Position
@@ -112,7 +113,7 @@ class Player(pygame.sprite.Sprite):
             self.bombs -= 1
             if self.character_id == "magical_girl":
                 self.bomb_timer = PLAYER_BOMB_DURATION
-                self.invincible_timer = max(self.invincible_timer, PLAYER_BOMB_INVINCIBLE)
+                # Gradual clear handled in game.py _process_bomb for better visual
             elif self.character_id == "muscular_man":
                 # Phoenix form lasts 5 seconds
                 self.bomb_timer = PLAYER_BOMB_DURATION

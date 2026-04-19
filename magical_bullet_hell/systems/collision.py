@@ -32,15 +32,16 @@ def check_player_enemy_bullet_collision(player, enemy_bullets, particles):
     return hit
 
 
-def check_graze(player, enemy_bullets, particles):
+def check_graze(player, enemy_bullets):
     """
     Check for graze (bullets passing close to player).
-    Awards score and power for near misses.
+    Returns a list of bullets that were grazed this frame.
     """
     if player.dead:
-        return
+        return []
 
     px, py = player.x, player.y
+    grazed_bullets = []
 
     for bullet in enemy_bullets:
         if bullet.grazed:
@@ -50,15 +51,9 @@ def check_graze(player, enemy_bullets, particles):
 
         if dist < PLAYER_GRAZE_RADIUS:
             bullet.grazed = True
-            from systems.audio import audio
-            audio.play("graze")
-            player.add_graze()
-            player.add_score(GRAZE_SCORE)
-            player.add_power(GRAZE_POWER)
-            particles.emit_graze(
-                (px + bullet.x) / 2,
-                (py + bullet.y) / 2,
-            )
+            grazed_bullets.append(bullet)
+
+    return grazed_bullets
 
 
 def check_player_bullet_enemy_collision(player_bullets, enemies, particles):
