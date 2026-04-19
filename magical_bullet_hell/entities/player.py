@@ -39,7 +39,7 @@ class Player(pygame.sprite.Sprite):
 
         # State
         self.lives = PLAYER_START_LIVES
-        self.bombs = PLAYER_START_BOMBS
+        self.bombs = 3 if self.character_id == "magical_girl" else 1
         self.power = 4.0  # Powerups removed, start at max power
         self.score = 0
         self.graze_count = 0
@@ -128,8 +128,8 @@ class Player(pygame.sprite.Sprite):
         if self.invincible_timer > 0:
             return False
             
-        # AUTO-BOMB
-        if self.bombs > 0 and not self.is_bombing:
+        # AUTO-BOMB (Muscular Man only)
+        if self.character_id == "muscular_man" and self.bombs > 0 and not self.is_bombing:
             if self.use_bomb():
                 # Flash or effect for auto-bomb
                 self.invincible_timer = max(self.invincible_timer, 60)
@@ -147,8 +147,8 @@ class Player(pygame.sprite.Sprite):
         self.x = float(PLAYFIELD_X + PLAYFIELD_WIDTH // 2)
         self.y = float(PLAYFIELD_Y + PLAYFIELD_HEIGHT - PLAYER_RESPAWN_Y_OFFSET)
         self.invincible_timer = PLAYER_INVINCIBLE_TIME
-        # Reset bombs to 1 per life
-        self.bombs = 1
+        # Reset bombs per life (3 for Magical Girl, 1 for Muscular Man)
+        self.bombs = 3 if self.character_id == "magical_girl" else 1
         self.bomb_timer = 0
 
     def shoot(self):
